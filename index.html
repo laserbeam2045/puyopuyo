@@ -806,6 +806,9 @@
       var AI_BEAM_WIDTH = 150;
       var AI_DEPTH = 4;
 
+      // 連鎖表示用
+      var chainDisplayTimeout = null;
+
       // 連打防止用
       var inputLocked = false;
       var INPUT_LOCK_TIME = 50;
@@ -1529,17 +1532,18 @@
       function rotatePuyo() {
         if (!canInput()) return;
         lockInput();
-        
+
         try {
           var newRotation = (currentPuyo.rotation + 1) % 4;
           var offsets = [[0, -1], [1, 0], [0, 1], [-1, 0]];
           var offset = offsets[newRotation];
           var newSubR = currentPuyo.row + offset[1];
           var newSubC = currentPuyo.col + offset[0];
+          var rotated = false;
 
           if (isValidPosition(newSubR, newSubC)) {
             currentPuyo.rotation = newRotation;
-            safeRenderBoard();
+            rotated = true;
           } else {
             var kicks = [-1, 1];
             for (var k = 0; k < kicks.length; k++) {
@@ -1548,9 +1552,17 @@
               if (isValidPosition(currentPuyo.row, kickC) && isValidPosition(newSubR, kickSubC)) {
                 currentPuyo.col = kickC;
                 currentPuyo.rotation = newRotation;
-                safeRenderBoard();
+                rotated = true;
                 break;
               }
+            }
+          }
+
+          if (rotated) {
+            safeRenderBoard();
+            // 回転成功時は落下タイマーをリセット
+            if (!isPaused && gameStarted) {
+              startDropInterval();
             }
           }
         } catch (e) {
@@ -1842,10 +1854,16 @@
         try {
           var display = document.getElementById('chainDisplay');
           if (!display) return;
-          
+
+          // 既存のタイムアウトをクリア
+          if (chainDisplayTimeout) {
+            clearTimeout(chainDisplayTimeout);
+            chainDisplayTimeout = null;
+          }
+
           var chainClass = 'chain' + Math.min(count, 6);
           display.className = 'chain-display';
-          
+
           if (count >= 7) {
             display.textContent = '✦ ' + count + '連鎖!! ✦';
           } else if (count >= 5) {
@@ -1853,13 +1871,16 @@
           } else {
             display.textContent = count + '連鎖!';
           }
-          
+
           void display.offsetWidth;
           display.classList.add('show', chainClass);
 
-          setTimeout(function() {
+          // 新しいタイムアウトを設定（連鎖数が多いほど長く表示）
+          var displayTime = 2500 + (count * 300);
+          chainDisplayTimeout = setTimeout(function() {
             display.classList.remove('show', chainClass);
-          }, 2500);
+            chainDisplayTimeout = null;
+          }, displayTime);
         } catch (e) {
           console.error('Chain display error:', e);
         }

@@ -1,0 +1,2167 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>ぷよぷよ</title>
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      position: fixed;
+      font-family: 'M PLUS Rounded 1c', sans-serif;
+    }
+
+    body {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      min-height: -webkit-fill-available;
+    }
+
+    .game-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 6px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      gap: 8px;
+    }
+
+    .title {
+      font-size: 1.3rem;
+      font-weight: 900;
+      background: linear-gradient(180deg, #fff 0%, #94bbe9 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      white-space: nowrap;
+    }
+
+    .score-panel {
+      background: rgba(0,0,0,0.5);
+      border-radius: 12px;
+      padding: 4px 12px;
+      border: 2px solid rgba(255,255,255,0.15);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .score-label {
+      font-size: 0.6rem;
+      color: rgba(255,255,255,0.7);
+      font-weight: 700;
+    }
+
+    .score-value {
+      font-size: 1.1rem;
+      font-weight: 900;
+      color: #ffd54f;
+      text-shadow: 0 1px 4px rgba(255,200,0,0.5);
+      min-width: 60px;
+      text-align: right;
+    }
+
+    .score-value.bump {
+      animation: scoreBump 0.15s ease;
+    }
+
+    @keyframes scoreBump {
+      50% { transform: scale(1.15); color: #ffeb3b; }
+    }
+
+    .game-wrapper {
+      display: flex;
+      gap: 6px;
+      align-items: stretch;
+    }
+
+    .side-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 50px;
+    }
+
+    .next-container, .combo-panel {
+      background: rgba(0,0,0,0.4);
+      border-radius: 10px;
+      padding: 6px;
+      border: 2px solid rgba(255,255,255,0.15);
+      text-align: center;
+    }
+
+    .panel-label {
+      color: white;
+      font-size: 0.55rem;
+      font-weight: 700;
+      opacity: 0.9;
+      margin-bottom: 4px;
+    }
+
+    .next-preview {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .next-puyo-set {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1px;
+    }
+
+    .combo-chain {
+      font-size: 0.85rem;
+      font-weight: 900;
+      color: #ff9800;
+      text-shadow: 0 1px 4px rgba(255,150,0,0.5);
+      min-height: 20px;
+      line-height: 20px;
+    }
+
+    .combo-bonus {
+      font-size: 0.6rem;
+      font-weight: 700;
+      color: #69f0ae;
+      min-height: 14px;
+      line-height: 14px;
+    }
+
+    .game-board {
+      background: rgba(0,0,0,0.5);
+      border-radius: 12px;
+      padding: 6px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+      border: 3px solid rgba(255,255,255,0.15);
+    }
+
+    .board-inner {
+      display: grid;
+      grid-template-columns: repeat(6, 38px);
+      grid-template-rows: repeat(12, 38px);
+      gap: 2px;
+      background: rgba(0,0,0,0.4);
+      padding: 4px;
+      border-radius: 8px;
+    }
+
+    .cell {
+      width: 38px;
+      height: 38px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .puyo {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      position: absolute;
+    }
+
+    .puyo::before {
+      content: '';
+      position: absolute;
+      top: 5px;
+      left: 7px;
+      width: 7px;
+      height: 5px;
+      background: rgba(255,255,255,0.7);
+      border-radius: 50%;
+    }
+
+    .puyo::after {
+      content: '';
+      position: absolute;
+      top: 7px;
+      right: 9px;
+      width: 4px;
+      height: 3px;
+      background: rgba(255,255,255,0.5);
+      border-radius: 50%;
+    }
+
+    .puyo.small {
+      width: 22px;
+      height: 22px;
+      position: relative;
+    }
+
+    .puyo.small::before {
+      top: 3px;
+      left: 5px;
+      width: 5px;
+      height: 4px;
+    }
+
+    .puyo.small::after {
+      top: 5px;
+      right: 5px;
+      width: 3px;
+      height: 2px;
+    }
+
+    .puyo.red {
+      background: radial-gradient(circle at 30% 30%, #ff8a8a, #ff4757, #c0392b);
+      box-shadow: inset -3px -3px 6px rgba(0,0,0,0.3), inset 3px 3px 6px rgba(255,255,255,0.4), 0 0 12px rgba(255,71,87,0.6);
+    }
+
+    .puyo.green {
+      background: radial-gradient(circle at 30% 30%, #98fb98, #32cd32, #228b22);
+      box-shadow: inset -3px -3px 6px rgba(0,0,0,0.3), inset 3px 3px 6px rgba(255,255,255,0.4), 0 0 12px rgba(50,205,50,0.6);
+    }
+
+    .puyo.yellow {
+      background: radial-gradient(circle at 30% 30%, #fff56d, #ffd700, #daa520);
+      box-shadow: inset -3px -3px 6px rgba(0,0,0,0.2), inset 3px 3px 6px rgba(255,255,255,0.5), 0 0 12px rgba(255,215,0,0.6);
+    }
+
+    .puyo.blue {
+      background: radial-gradient(circle at 30% 30%, #87ceff, #4169e1, #0000cd);
+      box-shadow: inset -3px -3px 6px rgba(0,0,0,0.3), inset 3px 3px 6px rgba(255,255,255,0.4), 0 0 12px rgba(65,105,225,0.6);
+    }
+
+    .puyo.purple {
+      background: radial-gradient(circle at 30% 30%, #dda0dd, #da70d6, #9932cc);
+      box-shadow: inset -3px -3px 6px rgba(0,0,0,0.3), inset 3px 3px 6px rgba(255,255,255,0.4), 0 0 12px rgba(218,112,214,0.6);
+    }
+
+    .puyo.popping {
+      animation: pop 0.25s ease-out forwards;
+    }
+
+    @keyframes pop {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.3); opacity: 0.8; }
+      100% { transform: scale(0); opacity: 0; }
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      width: 100%;
+    }
+
+    .control-btn {
+      height: 48px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.3rem;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+
+    .btn-left, .btn-right {
+      background: linear-gradient(180deg, #4fc3f7 0%, #0288d1 100%);
+      color: white;
+      box-shadow: 0 3px 0 #01579b;
+    }
+
+    .btn-left:active, .btn-right:active {
+      box-shadow: 0 1px 0 #01579b;
+      transform: translateY(2px);
+    }
+
+    .btn-rotate {
+      background: linear-gradient(180deg, #ffb74d 0%, #f57c00 100%);
+      color: white;
+      box-shadow: 0 3px 0 #e65100;
+    }
+
+    .btn-rotate:active {
+      box-shadow: 0 1px 0 #e65100;
+      transform: translateY(2px);
+    }
+
+    .btn-drop {
+      grid-column: span 3;
+      height: 40px;
+      background: linear-gradient(180deg, #f06292 0%, #e91e63 100%);
+      color: white;
+      box-shadow: 0 3px 0 #ad1457;
+      font-size: 1rem;
+    }
+
+    .btn-drop:active {
+      box-shadow: 0 1px 0 #ad1457;
+      transform: translateY(2px);
+    }
+
+    .chain-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 100;
+      overflow: hidden;
+    }
+
+    .chain-display {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 3.5rem;
+      font-weight: 900;
+      color: white;
+      text-shadow: 
+        0 0 20px #ff0,
+        0 0 40px #ff0,
+        0 0 60px #f80,
+        0 0 80px #f00,
+        4px 4px 0 #000;
+      opacity: 0;
+      white-space: nowrap;
+    }
+
+    .chain-display.show {
+      animation: chainExplode 1s ease-out forwards;
+    }
+
+    @keyframes chainExplode {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3) rotate(-10deg); filter: blur(10px); }
+      15% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(3deg); filter: blur(0); }
+      30% { transform: translate(-50%, -50%) scale(1) rotate(-2deg); }
+      45% { transform: translate(-50%, -50%) scale(1.1) rotate(1deg); }
+      70% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+      100% { opacity: 0; transform: translate(-50%, -70%) scale(0.8); }
+    }
+
+    .chain-display.chain2 { color: #fff; text-shadow: 0 0 20px #0ff, 0 0 40px #0ff, 0 0 60px #0af, 4px 4px 0 #000; }
+    .chain-display.chain3 { color: #fff; text-shadow: 0 0 20px #0f0, 0 0 40px #0f0, 0 0 60px #0a0, 4px 4px 0 #000; }
+    .chain-display.chain4 { color: #fff; text-shadow: 0 0 20px #ff0, 0 0 40px #ff0, 0 0 60px #fa0, 4px 4px 0 #000; }
+    .chain-display.chain5 { color: #fff; text-shadow: 0 0 20px #f0f, 0 0 40px #f0f, 0 0 60px #a0f, 4px 4px 0 #000; }
+    .chain-display.chain6 { color: #fff; text-shadow: 0 0 30px #f00, 0 0 60px #f00, 0 0 90px #f00, 4px 4px 0 #000; font-size: 4rem; }
+
+    .bonus-popup {
+      position: absolute;
+      top: 62%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 1.6rem;
+      font-weight: 900;
+      color: #69f0ae;
+      text-shadow: 0 0 10px #69f0ae, 0 0 20px #69f0ae, 2px 2px 0 #000;
+      opacity: 0;
+    }
+
+    .bonus-popup.show {
+      animation: bonusFloat 0.8s ease-out forwards;
+    }
+
+    @keyframes bonusFloat {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+      20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+      100% { opacity: 0; transform: translate(-50%, -100%) scale(0.8); }
+    }
+
+    .star {
+      position: absolute;
+      opacity: 0;
+      font-size: 24px;
+      color: #ffd700;
+      text-shadow: 0 0 10px #ffd700, 0 0 20px #ffa500;
+    }
+
+    .star.animate {
+      animation: starBurst 0.8s ease-out forwards;
+    }
+
+    @keyframes starBurst {
+      0% { opacity: 1; transform: translate(-50%, -50%) scale(0); }
+      50% { opacity: 1; transform: translate(var(--tx), var(--ty)) scale(1.2) rotate(180deg); }
+      100% { opacity: 0; transform: translate(calc(var(--tx) * 1.5), calc(var(--ty) * 1.5)) scale(0.5) rotate(360deg); }
+    }
+
+    .screen-flash {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: white;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 99;
+    }
+
+    .screen-flash.flash {
+      animation: flashEffect 0.15s ease-out;
+    }
+
+    @keyframes flashEffect {
+      0% { opacity: 0.4; }
+      100% { opacity: 0; }
+    }
+
+    .game-over-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.9);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      z-index: 200;
+    }
+
+    .game-over-overlay.show {
+      display: flex;
+    }
+
+    .game-over-text {
+      font-size: 2rem;
+      font-weight: 900;
+      color: white;
+      text-shadow: 0 0 20px #f00, 0 0 40px #f00;
+      animation: gameOverPulse 1s ease-in-out infinite;
+    }
+
+    @keyframes gameOverPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    .final-score-panel {
+      background: rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 14px 30px;
+      text-align: center;
+    }
+
+    .final-score-label {
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.8);
+      font-weight: 700;
+    }
+
+    .final-score {
+      font-size: 2rem;
+      color: #ffd54f;
+      font-weight: 900;
+      text-shadow: 0 0 15px rgba(255,200,0,0.7);
+    }
+
+    .final-stats {
+      margin-top: 6px;
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.7);
+    }
+
+    .restart-btn {
+      padding: 12px 36px;
+      font-size: 1.1rem;
+      font-weight: 800;
+      border: none;
+      border-radius: 25px;
+      background: linear-gradient(180deg, #69f0ae 0%, #00c853 100%);
+      color: white;
+      cursor: pointer;
+      box-shadow: 0 3px 0 #00a043, 0 0 20px rgba(105,240,174,0.5);
+      font-family: 'M PLUS Rounded 1c', sans-serif;
+      touch-action: manipulation;
+    }
+
+    .restart-btn:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 #00a043, 0 0 15px rgba(105,240,174,0.5);
+    }
+
+    .ai-toggle, .pause-btn {
+      padding: 4px 10px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      border: none;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.7);
+      cursor: pointer;
+      font-family: 'M PLUS Rounded 1c', sans-serif;
+      transition: all 0.2s;
+      touch-action: manipulation;
+    }
+
+    .ai-toggle.active {
+      background: linear-gradient(180deg, #69f0ae 0%, #00c853 100%);
+      color: white;
+      box-shadow: 0 0 10px rgba(105,240,174,0.5);
+    }
+
+    .pause-btn.active {
+      background: linear-gradient(180deg, #ffb74d 0%, #f57c00 100%);
+      color: white;
+      box-shadow: 0 0 10px rgba(255,183,77,0.5);
+    }
+
+    .start-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 30px;
+      z-index: 300;
+    }
+
+    .start-overlay.hidden {
+      display: none;
+    }
+
+    .start-title {
+      font-size: 3rem;
+      font-weight: 900;
+      background: linear-gradient(180deg, #ff6b6b 0%, #ffd93d 25%, #6bcb77 50%, #4d96ff 75%, #9b59b6 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-shadow: none;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));
+    }
+
+    .start-btn {
+      padding: 16px 60px;
+      font-size: 1.4rem;
+      font-weight: 800;
+      border: none;
+      border-radius: 30px;
+      background: linear-gradient(180deg, #4fc3f7 0%, #0288d1 100%);
+      color: white;
+      cursor: pointer;
+      box-shadow: 0 4px 0 #01579b, 0 0 30px rgba(79,195,247,0.5);
+      font-family: 'M PLUS Rounded 1c', sans-serif;
+      touch-action: manipulation;
+      animation: startPulse 2s ease-in-out infinite;
+    }
+
+    .start-btn:active {
+      transform: translateY(3px);
+      box-shadow: 0 1px 0 #01579b, 0 0 20px rgba(79,195,247,0.5);
+    }
+
+    @keyframes startPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    .start-instructions {
+      color: rgba(255,255,255,0.7);
+      font-size: 0.85rem;
+      text-align: center;
+      line-height: 1.8;
+    }
+
+    .pause-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      z-index: 250;
+    }
+
+    .pause-overlay.show {
+      display: flex;
+    }
+
+    .pause-text {
+      font-size: 2.5rem;
+      font-weight: 900;
+      color: #ffb74d;
+      text-shadow: 0 0 20px rgba(255,183,77,0.7);
+    }
+
+    .resume-btn {
+      padding: 14px 40px;
+      font-size: 1.1rem;
+      font-weight: 800;
+      border: none;
+      border-radius: 25px;
+      background: linear-gradient(180deg, #69f0ae 0%, #00c853 100%);
+      color: white;
+      cursor: pointer;
+      box-shadow: 0 3px 0 #00a043, 0 0 20px rgba(105,240,174,0.5);
+      font-family: 'M PLUS Rounded 1c', sans-serif;
+      touch-action: manipulation;
+    }
+
+    .resume-btn:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 #00a043;
+    }
+
+    .puyo.ghost {
+      opacity: 0.35;
+      animation: ghostPulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes ghostPulse {
+      0%, 100% { opacity: 0.25; transform: scale(0.95); }
+      50% { opacity: 0.45; transform: scale(1); }
+    }
+
+    @media (max-height: 650px) {
+      .board-inner { grid-template-columns: repeat(6, 32px); grid-template-rows: repeat(12, 32px); }
+      .cell { width: 32px; height: 32px; }
+      .puyo { width: 27px; height: 27px; }
+      .puyo::before { width: 6px; height: 4px; top: 4px; left: 6px; }
+      .puyo::after { width: 3px; height: 2px; top: 6px; right: 7px; }
+      .puyo.small { width: 20px; height: 20px; }
+      .side-panel { width: 44px; }
+      .control-btn { height: 42px; font-size: 1.2rem; }
+      .btn-drop { height: 36px; font-size: 0.9rem; }
+      .chain-display { font-size: 2.8rem; }
+    }
+
+    @media (max-height: 550px) {
+      .board-inner { grid-template-columns: repeat(6, 28px); grid-template-rows: repeat(12, 28px); }
+      .cell { width: 28px; height: 28px; }
+      .puyo { width: 24px; height: 24px; }
+      .puyo.small { width: 18px; height: 18px; }
+      .side-panel { width: 40px; }
+      .control-btn { height: 38px; font-size: 1.1rem; }
+      .btn-drop { height: 32px; font-size: 0.85rem; }
+      .title { font-size: 1.1rem; }
+      .chain-display { font-size: 2.2rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="screen-flash" id="screenFlash"></div>
+
+  <div class="game-container">
+    <div class="header">
+      <div class="title">ぷよぷよ</div>
+      <button class="pause-btn" id="pauseBtn">PAUSE</button>
+      <button class="ai-toggle" id="aiToggle">AI</button>
+      <div class="score-panel">
+        <div class="score-label">SCORE</div>
+        <div class="score-value" id="score">0</div>
+      </div>
+    </div>
+    
+    <div class="game-wrapper">
+      <div class="side-panel">
+        <div class="next-container">
+          <div class="panel-label">NEXT</div>
+          <div class="next-preview" id="nextPreview"></div>
+        </div>
+        <div class="combo-panel">
+          <div class="panel-label">COMBO</div>
+          <div class="combo-chain" id="comboChain">-</div>
+          <div class="combo-bonus" id="comboBonus"></div>
+        </div>
+      </div>
+      <div class="game-board" id="gameBoard">
+        <div class="board-inner" id="board"></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="control-btn btn-left" id="btnLeft">◀</button>
+      <button class="control-btn btn-rotate" id="btnRotate">↻</button>
+      <button class="control-btn btn-right" id="btnRight">▶</button>
+      <button class="control-btn btn-drop" id="btnDrop">▼ 落下</button>
+    </div>
+  </div>
+
+  <div class="chain-overlay" id="chainOverlay">
+    <div class="chain-display" id="chainDisplay"></div>
+    <div class="bonus-popup" id="bonusPopup"></div>
+  </div>
+
+  <div class="game-over-overlay" id="gameOverOverlay">
+    <div class="game-over-text">GAME OVER</div>
+    <div class="final-score-panel">
+      <div class="final-score-label">FINAL SCORE</div>
+      <div class="final-score" id="finalScore">0</div>
+      <div class="final-stats">最大連鎖: <span id="maxChain">0</span>連鎖</div>
+    </div>
+    <button class="restart-btn" id="restartBtn">もう一度</button>
+  </div>
+
+  <div class="start-overlay" id="startOverlay">
+    <div class="start-title">ぷよぷよ</div>
+    <button class="start-btn" id="startBtn">START</button>
+    <div class="start-instructions">
+      ← → : 移動<br>
+      ↑ : 回転<br>
+      ↓ : 落下<br>
+      スペース : 即落下<br>
+      Esc : ポーズ
+    </div>
+  </div>
+
+  <div class="pause-overlay" id="pauseOverlay">
+    <div class="pause-text">PAUSE</div>
+    <button class="resume-btn" id="resumeBtn">再開</button>
+  </div>
+
+  <script>
+    (function() {
+      'use strict';
+
+      var COLS = 6;
+      var ROWS = 12;
+      var COLORS = ['red', 'green', 'yellow', 'blue', 'purple'];
+      var HIDDEN_ROWS = 1;
+
+      var CHAIN_BONUS = [0, 0, 8, 16, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 480, 512];
+      var CONNECTION_BONUS = [0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 7, 10];
+      var COLOR_BONUS = [0, 0, 3, 6, 12, 24];
+
+      var board = [];
+      var currentPuyo = null;
+      var nextPuyos = [];
+      var score = 0;
+      var gameOver = false;
+      var gameStarted = false;
+      var isPaused = false;
+      var dropInterval = null;
+      var isProcessing = false;
+      var maxChainCount = 0;
+      var currentChainCount = 0;
+
+      // AIガイド用
+      var aiGuideEnabled = false;
+      var recommendedPlacement = null;
+      var AI_BEAM_WIDTH = 150;
+      var AI_DEPTH = 4;
+
+      // 連打防止用
+      var inputLocked = false;
+      var INPUT_LOCK_TIME = 50;
+
+      function lockInput() {
+        inputLocked = true;
+        setTimeout(function() {
+          inputLocked = false;
+        }, INPUT_LOCK_TIME);
+      }
+
+      function canInput() {
+        return !inputLocked && !isProcessing && !gameOver && !isPaused && gameStarted && currentPuyo !== null;
+      }
+
+      // ========== AIエンジン ==========
+
+      function cloneBoard(b) {
+        var newBoard = [];
+        for (var r = 0; r < b.length; r++) {
+          newBoard.push(b[r].slice());
+        }
+        return newBoard;
+      }
+
+      function getColumnHeight(b, col) {
+        for (var r = 0; r < ROWS + HIDDEN_ROWS; r++) {
+          if (b[r] && b[r][col]) return ROWS + HIDDEN_ROWS - r;
+        }
+        return 0;
+      }
+
+      function aiApplyGravity(b) {
+        var changed = true;
+        while (changed) {
+          changed = false;
+          for (var c = 0; c < COLS; c++) {
+            for (var r = ROWS + HIDDEN_ROWS - 2; r >= 0; r--) {
+              if (b[r] && b[r][c] && b[r + 1] && !b[r + 1][c]) {
+                b[r + 1][c] = b[r][c];
+                b[r][c] = null;
+                changed = true;
+              }
+            }
+          }
+        }
+      }
+
+      function aiSimulateChains(b) {
+        var totalPopped = 0;
+        var chainCount = 0;
+
+        while (true) {
+          aiApplyGravity(b);
+
+          var visited = [];
+          for (var r = 0; r < ROWS + HIDDEN_ROWS; r++) {
+            visited.push(new Array(COLS).fill(false));
+          }
+
+          var toRemove = [];
+          var colorSet = {};
+
+          function floodFill(r, c, color, group) {
+            if (r < 0 || r >= ROWS + HIDDEN_ROWS || c < 0 || c >= COLS) return;
+            if (!b[r] || visited[r][c] || b[r][c] !== color) return;
+            visited[r][c] = true;
+            group.push({ r: r, c: c });
+            floodFill(r - 1, c, color, group);
+            floodFill(r + 1, c, color, group);
+            floodFill(r, c - 1, color, group);
+            floodFill(r, c + 1, color, group);
+          }
+
+          for (var r = 0; r < ROWS + HIDDEN_ROWS; r++) {
+            for (var c = 0; c < COLS; c++) {
+              if (!visited[r][c] && b[r] && b[r][c]) {
+                var group = [];
+                floodFill(r, c, b[r][c], group);
+                if (group.length >= 4) {
+                  colorSet[b[r][c]] = true;
+                  for (var i = 0; i < group.length; i++) {
+                    toRemove.push(group[i]);
+                  }
+                }
+              }
+            }
+          }
+
+          if (toRemove.length === 0) break;
+
+          chainCount++;
+          totalPopped += toRemove.length;
+
+          for (var i = 0; i < toRemove.length; i++) {
+            var item = toRemove[i];
+            b[item.r][item.c] = null;
+          }
+        }
+
+        return { chainCount: chainCount, popped: totalPopped };
+      }
+
+      function getPlacementPositions(col, rotation) {
+        var offsets = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+        var offset = offsets[rotation];
+        return [
+          { r: 0, c: col },
+          { r: offset[1], c: col + offset[0] }
+        ];
+      }
+
+      function simulatePlacement(b, puyo, col, rotation) {
+        var positions = getPlacementPositions(col, rotation);
+        var mainPos = positions[0];
+        var subPos = positions[1];
+
+        // 範囲チェック
+        if (mainPos.c < 0 || mainPos.c >= COLS || subPos.c < 0 || subPos.c >= COLS) {
+          return null;
+        }
+
+        // 落下位置を計算
+        var mainDropR = -1;
+        for (var r = ROWS + HIDDEN_ROWS - 1; r >= 0; r--) {
+          if (!b[r][mainPos.c]) { mainDropR = r; break; }
+        }
+        if (mainDropR < 0) return null;
+
+        var subDropR = -1;
+        for (var r = ROWS + HIDDEN_ROWS - 1; r >= 0; r--) {
+          if (!b[r][subPos.c]) { subDropR = r; break; }
+        }
+        if (subDropR < 0) return null;
+
+        // 回転によって落下順序を調整
+        var newBoard = cloneBoard(b);
+
+        if (rotation === 2) { // サブが下
+          newBoard[subDropR][subPos.c] = puyo.sub;
+          // メインはその上
+          for (var r = subDropR - 1; r >= 0; r--) {
+            if (!newBoard[r][mainPos.c]) { newBoard[r][mainPos.c] = puyo.main; break; }
+          }
+        } else if (rotation === 0) { // サブが上
+          newBoard[mainDropR][mainPos.c] = puyo.main;
+          for (var r = mainDropR - 1; r >= 0; r--) {
+            if (!newBoard[r][subPos.c]) { newBoard[r][subPos.c] = puyo.sub; break; }
+          }
+        } else { // 横並び
+          newBoard[mainDropR][mainPos.c] = puyo.main;
+          newBoard[subDropR][subPos.c] = puyo.sub;
+        }
+
+        return newBoard;
+      }
+
+      function generateAllPlacements(b, puyo) {
+        var placements = [];
+        for (var col = 0; col < COLS; col++) {
+          for (var rotation = 0; rotation < 4; rotation++) {
+            var positions = getPlacementPositions(col, rotation);
+            var valid = true;
+            for (var i = 0; i < positions.length; i++) {
+              if (positions[i].c < 0 || positions[i].c >= COLS) {
+                valid = false;
+                break;
+              }
+            }
+            if (!valid) continue;
+
+            var simBoard = simulatePlacement(b, puyo, col, rotation);
+            if (simBoard) {
+              placements.push({ col: col, rotation: rotation, board: simBoard });
+            }
+          }
+        }
+        return placements;
+      }
+
+      function evaluateBoard(b, chainResult) {
+        var score = 0;
+
+        // 連鎖評価：2連鎖以上を非常に高く評価、1連鎖はペナルティ
+        if (chainResult.chainCount >= 2) {
+          // 2連鎖以上は大きな報酬（指数的）
+          score += Math.pow(chainResult.chainCount, 3) * 500;
+        } else if (chainResult.chainCount === 1) {
+          // 1連鎖は仕込みを壊すのでペナルティ（ただし緊急時は除く）
+          score -= 500;
+        }
+
+        // 高さ計算
+        var maxHeight = 0;
+        var heights = [];
+        for (var c = 0; c < COLS; c++) {
+          var h = getColumnHeight(b, c);
+          heights.push(h);
+          if (h > maxHeight) maxHeight = h;
+        }
+
+        // 列ごとの高さペナルティ（中央ほど厳しく）
+        // 連鎖報酬(数万点)に対抗できる大きさに設定
+        var columnPenaltyWeight = [1, 3, 8, 8, 3, 1]; // 中央がさらに重い
+
+        for (var c = 0; c < COLS; c++) {
+          var h = heights[c];
+          if (h >= ROWS) {
+            if (c === 2 || c === 3) {
+              return -500000; // 中央は絶対ダメ
+            } else {
+              return -200000;
+            }
+          } else if (h >= ROWS - 1) { // 11段
+            score -= 15000 * columnPenaltyWeight[c];
+          } else if (h >= ROWS - 2) { // 10段
+            score -= 8000 * columnPenaltyWeight[c];
+          } else if (h >= ROWS - 3) { // 9段
+            score -= 4000 * columnPenaltyWeight[c];
+          } else if (h >= ROWS - 4) { // 8段
+            score -= 2000 * columnPenaltyWeight[c];
+          } else if (h >= 6) {
+            score -= 500 * columnPenaltyWeight[c] * (h - 5);
+          }
+        }
+
+        // グループ分析
+        var visited = [];
+        for (var r = 0; r < ROWS + HIDDEN_ROWS; r++) {
+          visited.push(new Array(COLS).fill(false));
+        }
+
+        var groups = [];
+        function floodFillGroup(r, c, color, group) {
+          if (r < 0 || r >= ROWS + HIDDEN_ROWS || c < 0 || c >= COLS) return;
+          if (!b[r] || visited[r][c] || b[r][c] !== color) return;
+          visited[r][c] = true;
+          group.push({ r: r, c: c });
+          floodFillGroup(r - 1, c, color, group);
+          floodFillGroup(r + 1, c, color, group);
+          floodFillGroup(r, c - 1, color, group);
+          floodFillGroup(r, c + 1, color, group);
+        }
+
+        for (var r = 0; r < ROWS + HIDDEN_ROWS; r++) {
+          for (var c = 0; c < COLS; c++) {
+            if (!visited[r][c] && b[r] && b[r][c]) {
+              var group = [];
+              floodFillGroup(r, c, b[r][c], group);
+              if (group.length > 0) {
+                // グループの最下行を計算
+                var maxRow = 0;
+                for (var gi = 0; gi < group.length; gi++) {
+                  if (group[gi].r > maxRow) maxRow = group[gi].r;
+                }
+                groups.push({ color: b[r][c], cells: group, size: group.length, bottomRow: maxRow });
+              }
+            }
+          }
+        }
+
+        // グループをサイズと位置で分類
+        var threeGroups = [];
+        var twoGroups = [];
+        for (var i = 0; i < groups.length; i++) {
+          var g = groups[i];
+          if (g.size === 3) threeGroups.push(g);
+          else if (g.size === 2) twoGroups.push(g);
+        }
+
+        // 3個グループは連鎖の核心（非常に重要）
+        for (var i = 0; i < threeGroups.length; i++) {
+          var g = threeGroups[i];
+          score += 400;
+          // 下にあるほど安定（土台）
+          score += g.bottomRow * 15;
+        }
+
+        // 複数の3個グループがあればさらにボーナス
+        if (threeGroups.length >= 2) {
+          score += threeGroups.length * 300;
+        }
+
+        // 2個グループも評価
+        score += twoGroups.length * 60;
+
+        // ===== 連鎖ポテンシャル評価 =====
+        // 各3個グループが消えた時の連鎖をシミュレート
+        var maxPotentialChain = 0;
+        for (var i = 0; i < threeGroups.length; i++) {
+          var g = threeGroups[i];
+          var testBoard = cloneBoard(b);
+          for (var j = 0; j < g.cells.length; j++) {
+            testBoard[g.cells[j].r][g.cells[j].c] = null;
+          }
+          var potentialResult = aiSimulateChains(testBoard);
+          if (potentialResult.chainCount > maxPotentialChain) {
+            maxPotentialChain = potentialResult.chainCount;
+          }
+        }
+        // 連鎖ポテンシャルを非常に高く評価（これが連鎖構築の核心）
+        if (maxPotentialChain >= 1) {
+          score += Math.pow(maxPotentialChain + 1, 3) * 200;
+        }
+
+        // ===== 階段積みパターン検出 =====
+        // 左から右に向かって高さが増加する形を評価
+        var staircaseBonus = 0;
+        var ascending = true;
+        for (var c = 0; c < COLS - 1; c++) {
+          var diff = heights[c + 1] - heights[c];
+          if (diff >= 0 && diff <= 2) {
+            staircaseBonus += 30;
+          } else if (diff < 0) {
+            ascending = false;
+          }
+        }
+        if (ascending && heights[0] > 0) {
+          staircaseBonus += 100;
+        }
+        score += staircaseBonus;
+
+        // ===== 縦の連鎖構造評価 =====
+        // 同じ列で異なる色のグループが重なっている = 連鎖になりやすい
+        for (var c = 0; c < COLS; c++) {
+          var colGroups = [];
+          for (var i = 0; i < groups.length; i++) {
+            for (var j = 0; j < groups[i].cells.length; j++) {
+              if (groups[i].cells[j].c === c) {
+                colGroups.push({ color: groups[i].color, row: groups[i].cells[j].r, size: groups[i].size });
+                break;
+              }
+            }
+          }
+          // 同じ列に複数グループがあれば連鎖候補
+          if (colGroups.length >= 2) {
+            var uniqueColors = {};
+            for (var i = 0; i < colGroups.length; i++) {
+              uniqueColors[colGroups[i].color] = true;
+            }
+            score += Object.keys(uniqueColors).length * 50;
+          }
+        }
+
+        // ===== 色の分布評価 =====
+        // 同じ色が近くに集まっているほど良い
+        var colorPositions = {};
+        for (var r = 0; r < ROWS + HIDDEN_ROWS; r++) {
+          for (var c = 0; c < COLS; c++) {
+            if (b[r] && b[r][c]) {
+              if (!colorPositions[b[r][c]]) colorPositions[b[r][c]] = [];
+              colorPositions[b[r][c]].push({ r: r, c: c });
+            }
+          }
+        }
+
+        // ===== 発火点の準備状況 =====
+        // 3個グループの上に空きがあり、1手で消せる状態を評価
+        for (var i = 0; i < threeGroups.length; i++) {
+          var g = threeGroups[i];
+          var canTrigger = false;
+          for (var j = 0; j < g.cells.length; j++) {
+            var cell = g.cells[j];
+            // この位置の上に置けるか
+            if (cell.r >= 1) {
+              var above = cell.r - 1;
+              if (!b[above] || !b[above][cell.c]) {
+                // 上が空いている
+                canTrigger = true;
+                break;
+              }
+            }
+          }
+          if (canTrigger && maxPotentialChain >= 1) {
+            score += 150; // 発火可能で連鎖が続く
+          }
+        }
+
+        // ===== 平坦すぎるとダメ =====
+        // ある程度の高低差があった方が連鎖しやすい
+        var totalDiff = 0;
+        for (var c = 0; c < COLS - 1; c++) {
+          totalDiff += Math.abs(heights[c] - heights[c + 1]);
+        }
+        if (totalDiff < 3 && maxHeight > 3) {
+          score -= 50; // 平坦すぎ
+        }
+
+        // ===== 盤面占有率ペナルティ =====
+        var totalCells = COLS * ROWS; // 6 * 12 = 72
+        var filledCells = 0;
+        for (var r = HIDDEN_ROWS; r < ROWS + HIDDEN_ROWS; r++) {
+          for (var c = 0; c < COLS; c++) {
+            if (b[r] && b[r][c]) filledCells++;
+          }
+        }
+        var occupancyRate = filledCells / totalCells;
+
+        // 占有率が高い時は1連鎖ペナルティを解除して消すことを優先
+        if (occupancyRate >= 0.50 && chainResult.chainCount === 1) {
+          score += 2000; // ペナルティ解除＋ボーナス
+        }
+
+        // 占有率ペナルティ（連鎖報酬に対抗できる大きさ）
+        if (occupancyRate >= 0.65) {
+          score -= 80000;
+        } else if (occupancyRate >= 0.55) {
+          score -= 40000;
+        } else if (occupancyRate >= 0.50) {
+          score -= 20000;
+        } else if (occupancyRate >= 0.45) {
+          score -= 10000;
+        } else if (occupancyRate >= 0.40) {
+          score -= 5000;
+        }
+
+        return score;
+      }
+
+      function beamSearch(b, currentP, nextP, beamWidth, depth) {
+        if (!currentP) return null;
+
+        var beam = [{ board: cloneBoard(b), score: 0, firstMove: null }];
+
+        for (var d = 0; d < depth; d++) {
+          var puyo = (d === 0) ? currentP : (nextP[d - 1] || generatePuyo());
+          var candidates = [];
+
+          for (var s = 0; s < beam.length; s++) {
+            var state = beam[s];
+            var placements = generateAllPlacements(state.board, puyo);
+
+            for (var p = 0; p < placements.length; p++) {
+              var placement = placements[p];
+              var simBoard = cloneBoard(placement.board);
+              var chainResult = aiSimulateChains(simBoard);
+              var evalScore = evaluateBoard(simBoard, chainResult);
+
+              candidates.push({
+                board: simBoard,
+                score: state.score + evalScore,
+                firstMove: state.firstMove || { col: placement.col, rotation: placement.rotation }
+              });
+            }
+          }
+
+          if (candidates.length === 0) break;
+
+          candidates.sort(function(a, b) { return b.score - a.score; });
+          beam = candidates.slice(0, beamWidth);
+        }
+
+        if (beam.length > 0 && beam[0].firstMove) {
+          return beam[0].firstMove;
+        }
+        return null;
+      }
+
+      function calculateRecommendation() {
+        if (!aiGuideEnabled || !currentPuyo || isProcessing || gameOver) {
+          recommendedPlacement = null;
+          return;
+        }
+
+        setTimeout(function() {
+          try {
+            var result = beamSearch(board, currentPuyo, nextPuyos, AI_BEAM_WIDTH, AI_DEPTH);
+            recommendedPlacement = result;
+            safeRenderBoard();
+          } catch (e) {
+            console.error('AI calculation error:', e);
+            recommendedPlacement = null;
+          }
+        }, 10);
+      }
+
+      function getGhostPositions() {
+        if (!recommendedPlacement || !currentPuyo) return [];
+
+        var col = recommendedPlacement.col;
+        var rotation = recommendedPlacement.rotation;
+        var offsets = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+        var offset = offsets[rotation];
+
+        var mainC = col;
+        var subC = col + offset[0];
+
+        // 落下位置を計算
+        var mainDropR = -1;
+        for (var r = ROWS + HIDDEN_ROWS - 1; r >= 0; r--) {
+          if (!board[r][mainC]) { mainDropR = r; break; }
+        }
+
+        var subDropR = -1;
+        for (var r = ROWS + HIDDEN_ROWS - 1; r >= 0; r--) {
+          if (!board[r][subC]) { subDropR = r; break; }
+        }
+
+        if (mainDropR < 0 || subDropR < 0) return [];
+
+        var positions = [];
+
+        if (rotation === 2) { // サブが下
+          positions.push({ r: subDropR, c: subC, color: currentPuyo.sub });
+          var mainR = subDropR - 1;
+          if (mainC === subC && mainR >= 0) {
+            positions.push({ r: mainR, c: mainC, color: currentPuyo.main });
+          } else {
+            positions.push({ r: mainDropR, c: mainC, color: currentPuyo.main });
+          }
+        } else if (rotation === 0) { // サブが上
+          positions.push({ r: mainDropR, c: mainC, color: currentPuyo.main });
+          var subR = mainDropR - 1;
+          if (mainC === subC && subR >= 0) {
+            positions.push({ r: subR, c: subC, color: currentPuyo.sub });
+          } else {
+            positions.push({ r: subDropR, c: subC, color: currentPuyo.sub });
+          }
+        } else { // 横並び
+          positions.push({ r: mainDropR, c: mainC, color: currentPuyo.main });
+          positions.push({ r: subDropR, c: subC, color: currentPuyo.sub });
+        }
+
+        return positions;
+      }
+
+      // ========== /AIエンジン ==========
+
+      function initBoard() {
+        board = [];
+        for (var r = 0; r < ROWS + HIDDEN_ROWS; r++) {
+          board.push(new Array(COLS).fill(null));
+        }
+      }
+
+      function safeRenderBoard() {
+        try {
+          renderBoard();
+        } catch (e) {
+          console.error('Render error:', e);
+        }
+      }
+
+      function renderBoard() {
+        var boardEl = document.getElementById('board');
+        if (!boardEl) return;
+        
+        boardEl.innerHTML = '';
+        
+        for (var r = HIDDEN_ROWS; r < ROWS + HIDDEN_ROWS; r++) {
+          for (var c = 0; c < COLS; c++) {
+            var cell = document.createElement('div');
+            cell.className = 'cell';
+            
+            if (board[r] && board[r][c]) {
+              var puyo = document.createElement('div');
+              puyo.className = 'puyo ' + board[r][c];
+              cell.appendChild(puyo);
+            }
+            
+            boardEl.appendChild(cell);
+          }
+        }
+
+        if (currentPuyo && !isProcessing) {
+          var positions = getPuyoPositions();
+          for (var i = 0; i < positions.length; i++) {
+            var pos = positions[i];
+            if (pos && pos.r >= HIDDEN_ROWS && pos.r < ROWS + HIDDEN_ROWS && pos.c >= 0 && pos.c < COLS) {
+              var cellIdx = (pos.r - HIDDEN_ROWS) * COLS + pos.c;
+              var cell = boardEl.children[cellIdx];
+              if (cell && (!board[pos.r] || !board[pos.r][pos.c])) {
+                var puyo = document.createElement('div');
+                puyo.className = 'puyo ' + (i === 0 ? currentPuyo.main : currentPuyo.sub);
+                cell.appendChild(puyo);
+              }
+            }
+          }
+
+          // AIゴースト表示
+          if (aiGuideEnabled && recommendedPlacement) {
+            var ghostPositions = getGhostPositions();
+            for (var g = 0; g < ghostPositions.length; g++) {
+              var gpos = ghostPositions[g];
+              if (gpos && gpos.r >= HIDDEN_ROWS && gpos.r < ROWS + HIDDEN_ROWS) {
+                var gCellIdx = (gpos.r - HIDDEN_ROWS) * COLS + gpos.c;
+                var gCell = boardEl.children[gCellIdx];
+                if (gCell) {
+                  // 既存のゴーストを削除
+                  var existingGhost = gCell.querySelector('.puyo.ghost');
+                  if (existingGhost) existingGhost.remove();
+                  // 現在のぷよと重ならない場合のみ表示
+                  var hasCurrentPuyo = false;
+                  for (var p = 0; p < positions.length; p++) {
+                    if (positions[p].r === gpos.r && positions[p].c === gpos.c) {
+                      hasCurrentPuyo = true;
+                      break;
+                    }
+                  }
+                  if (!hasCurrentPuyo && !board[gpos.r][gpos.c]) {
+                    var ghostPuyo = document.createElement('div');
+                    ghostPuyo.className = 'puyo ghost ' + gpos.color;
+                    gCell.appendChild(ghostPuyo);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      function getPuyoPositions() {
+        if (!currentPuyo) return [];
+        var offsets = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+        var rotation = currentPuyo.rotation;
+        if (rotation < 0 || rotation >= offsets.length) rotation = 0;
+        var offset = offsets[rotation];
+        return [
+          { r: currentPuyo.row, c: currentPuyo.col },
+          { r: currentPuyo.row + offset[1], c: currentPuyo.col + offset[0] }
+        ];
+      }
+
+      function generatePuyo() {
+        return {
+          main: COLORS[Math.floor(Math.random() * COLORS.length)],
+          sub: COLORS[Math.floor(Math.random() * COLORS.length)]
+        };
+      }
+
+      function spawnPuyo() {
+        try {
+          while (nextPuyos.length < 5) {
+            nextPuyos.push(generatePuyo());
+          }
+
+          var next = nextPuyos.shift();
+
+          currentPuyo = {
+            main: next.main,
+            sub: next.sub,
+            row: 0,
+            col: 2,
+            rotation: 0
+          };
+
+          if (board[0][2] || board[1][2]) {
+            endGame();
+            return false;
+          }
+
+          currentChainCount = 0;
+          updateComboDisplay(0, 0);
+          renderNextPuyos();
+          calculateRecommendation();
+          return true;
+        } catch (e) {
+          console.error('Spawn error:', e);
+          return false;
+        }
+      }
+
+      function renderNextPuyos() {
+        var preview = document.getElementById('nextPreview');
+        if (!preview) return;
+        
+        preview.innerHTML = '';
+        
+        for (var i = 0; i < 4 && i < nextPuyos.length; i++) {
+          var puyoData = nextPuyos[i];
+          if (!puyoData) continue;
+          
+          var set = document.createElement('div');
+          set.className = 'next-puyo-set';
+          
+          var subPuyo = document.createElement('div');
+          subPuyo.className = 'puyo small ' + puyoData.sub;
+          set.appendChild(subPuyo);
+          
+          var mainPuyo = document.createElement('div');
+          mainPuyo.className = 'puyo small ' + puyoData.main;
+          set.appendChild(mainPuyo);
+          
+          preview.appendChild(set);
+        }
+      }
+
+      function isValidPosition(row, col) {
+        if (row < 0 || row >= ROWS + HIDDEN_ROWS || col < 0 || col >= COLS) return false;
+        if (!board[row]) return false;
+        return !board[row][col];
+      }
+
+      function movePuyo(direction) {
+        if (!canInput()) return;
+        lockInput();
+        
+        try {
+          var positions = getPuyoPositions();
+          var canMove = true;
+          
+          for (var i = 0; i < positions.length; i++) {
+            var pos = positions[i];
+            if (!pos) { canMove = false; break; }
+            var newC = pos.c + direction;
+            if (newC < 0 || newC >= COLS || (board[pos.r] && board[pos.r][newC])) {
+              canMove = false;
+              break;
+            }
+          }
+
+          if (canMove) {
+            currentPuyo.col += direction;
+            safeRenderBoard();
+          }
+        } catch (e) {
+          console.error('Move error:', e);
+        }
+      }
+
+      function rotatePuyo() {
+        if (!canInput()) return;
+        lockInput();
+        
+        try {
+          var newRotation = (currentPuyo.rotation + 1) % 4;
+          var offsets = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+          var offset = offsets[newRotation];
+          var newSubR = currentPuyo.row + offset[1];
+          var newSubC = currentPuyo.col + offset[0];
+
+          if (isValidPosition(newSubR, newSubC)) {
+            currentPuyo.rotation = newRotation;
+            safeRenderBoard();
+          } else {
+            var kicks = [-1, 1];
+            for (var k = 0; k < kicks.length; k++) {
+              var kickC = currentPuyo.col + kicks[k];
+              var kickSubC = kickC + offset[0];
+              if (isValidPosition(currentPuyo.row, kickC) && isValidPosition(newSubR, kickSubC)) {
+                currentPuyo.col = kickC;
+                currentPuyo.rotation = newRotation;
+                safeRenderBoard();
+                break;
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Rotate error:', e);
+        }
+      }
+
+      function dropStep() {
+        if (!currentPuyo || isProcessing || gameOver) return false;
+        
+        try {
+          var positions = getPuyoPositions();
+          var canDrop = true;
+          
+          for (var i = 0; i < positions.length; i++) {
+            var pos = positions[i];
+            if (!pos || !isValidPosition(pos.r + 1, pos.c)) {
+              canDrop = false;
+              break;
+            }
+          }
+
+          if (canDrop) {
+            currentPuyo.row++;
+            safeRenderBoard();
+            return true;
+          } else {
+            lockPuyo();
+            return false;
+          }
+        } catch (e) {
+          console.error('Drop error:', e);
+          return false;
+        }
+      }
+
+      function hardDrop() {
+        if (!canInput()) return;
+        inputLocked = true;
+        
+        try {
+          var dropped = false;
+          while (currentPuyo && !isProcessing && !gameOver) {
+            var positions = getPuyoPositions();
+            var canDrop = true;
+            
+            for (var i = 0; i < positions.length; i++) {
+              var pos = positions[i];
+              if (!pos || !isValidPosition(pos.r + 1, pos.c)) {
+                canDrop = false;
+                break;
+              }
+            }
+            
+            if (canDrop) {
+              currentPuyo.row++;
+              dropped = true;
+            } else {
+              break;
+            }
+          }
+          
+          if (dropped) {
+            safeRenderBoard();
+          }
+          
+          if (currentPuyo && !isProcessing && !gameOver) {
+            lockPuyo();
+          }
+        } catch (e) {
+          console.error('HardDrop error:', e);
+        }
+        
+        setTimeout(function() {
+          inputLocked = false;
+        }, 100);
+      }
+
+      function lockPuyo() {
+        if (!currentPuyo) return;
+        
+        try {
+          var positions = getPuyoPositions();
+          for (var i = 0; i < positions.length; i++) {
+            var pos = positions[i];
+            if (pos && pos.r >= 0 && pos.r < ROWS + HIDDEN_ROWS && pos.c >= 0 && pos.c < COLS) {
+              if (!board[pos.r]) board[pos.r] = new Array(COLS).fill(null);
+              board[pos.r][pos.c] = (i === 0) ? currentPuyo.main : currentPuyo.sub;
+            }
+          }
+          currentPuyo = null;
+          processBoard();
+        } catch (e) {
+          console.error('Lock error:', e);
+          currentPuyo = null;
+          isProcessing = false;
+        }
+      }
+
+      function processBoard() {
+        isProcessing = true;
+        currentChainCount = 0;
+
+        function processStep() {
+          applyGravity(function() {
+            findAndPopChains(function(result) {
+              try {
+                if (result && result.poppedCount > 0) {
+                  currentChainCount++;
+                  var chainScore = calculateScore(result.poppedCount, currentChainCount, result.groups || [], result.colorCount || 0);
+                  score += chainScore;
+                  updateScoreDisplay(score);
+                  updateComboDisplay(currentChainCount, chainScore);
+                  
+                  if (currentChainCount > maxChainCount) maxChainCount = currentChainCount;
+                  
+                  if (currentChainCount >= 2) {
+                    showChainDisplay(currentChainCount);
+                    createStarEffect(currentChainCount);
+                    if (currentChainCount >= 3) {
+                      triggerScreenFlash();
+                    }
+                  }
+                  showBonusPopup(chainScore);
+                  
+                  setTimeout(processStep, 380);
+                } else {
+                  isProcessing = false;
+                  if (!gameOver) {
+                    if (!spawnPuyo()) return;
+                    safeRenderBoard();
+                    startDropInterval();
+                  }
+                }
+              } catch (e) {
+                console.error('Process step error:', e);
+                isProcessing = false;
+              }
+            });
+          });
+        }
+        processStep();
+      }
+
+      function calculateScore(poppedCount, chainCount, groups, colorCount) {
+        var baseScore = poppedCount * 10;
+        var chainBonus = chainCount < CHAIN_BONUS.length ? CHAIN_BONUS[chainCount] : 512;
+        var connectionBonus = 0;
+        if (groups && groups.length) {
+          for (var i = 0; i < groups.length; i++) {
+            var size = groups[i] ? groups[i].length : 0;
+            connectionBonus += size < CONNECTION_BONUS.length ? CONNECTION_BONUS[size] : 10;
+          }
+        }
+        var colorBonus = colorCount < COLOR_BONUS.length ? COLOR_BONUS[colorCount] : 24;
+        var totalBonus = chainBonus + connectionBonus + colorBonus;
+        if (totalBonus === 0) totalBonus = 1;
+        return baseScore * totalBonus;
+      }
+
+      function updateScoreDisplay(newScore) {
+        var scoreEl = document.getElementById('score');
+        if (!scoreEl) return;
+        scoreEl.textContent = newScore.toLocaleString();
+        scoreEl.classList.remove('bump');
+        void scoreEl.offsetWidth;
+        scoreEl.classList.add('bump');
+      }
+
+      function updateComboDisplay(chain, bonus) {
+        var chainEl = document.getElementById('comboChain');
+        var bonusEl = document.getElementById('comboBonus');
+        if (!chainEl || !bonusEl) return;
+        
+        if (chain > 0) {
+          chainEl.textContent = chain + '連鎖';
+          bonusEl.textContent = '+' + bonus.toLocaleString();
+        } else {
+          chainEl.textContent = '-';
+          bonusEl.textContent = '';
+        }
+      }
+
+      function applyGravity(callback) {
+        function gravityStep() {
+          try {
+            var fell = false;
+            for (var c = 0; c < COLS; c++) {
+              for (var r = ROWS + HIDDEN_ROWS - 2; r >= 0; r--) {
+                if (board[r] && board[r][c] && board[r + 1] && !board[r + 1][c]) {
+                  board[r + 1][c] = board[r][c];
+                  board[r][c] = null;
+                  fell = true;
+                }
+              }
+            }
+            if (fell) {
+              safeRenderBoard();
+              setTimeout(gravityStep, 40);
+            } else {
+              callback();
+            }
+          } catch (e) {
+            console.error('Gravity error:', e);
+            callback();
+          }
+        }
+        gravityStep();
+      }
+
+      function findAndPopChains(callback) {
+        try {
+          var visited = [];
+          for (var r = 0; r < ROWS + HIDDEN_ROWS; r++) {
+            visited.push(new Array(COLS).fill(false));
+          }
+          
+          var allGroups = [];
+          var colorsPopped = {};
+
+          function floodFill(r, c, color, group) {
+            if (r < 0 || r >= ROWS + HIDDEN_ROWS || c < 0 || c >= COLS) return;
+            if (!board[r] || visited[r][c] || board[r][c] !== color) return;
+            visited[r][c] = true;
+            group.push({ r: r, c: c });
+            floodFill(r - 1, c, color, group);
+            floodFill(r + 1, c, color, group);
+            floodFill(r, c - 1, color, group);
+            floodFill(r, c + 1, color, group);
+          }
+
+          for (var r = 0; r < ROWS + HIDDEN_ROWS; r++) {
+            for (var c = 0; c < COLS; c++) {
+              if (!visited[r][c] && board[r] && board[r][c]) {
+                var group = [];
+                var color = board[r][c];
+                floodFill(r, c, color, group);
+                if (group.length >= 4) {
+                  allGroups.push(group);
+                  colorsPopped[color] = true;
+                }
+              }
+            }
+          }
+
+          var toRemove = [];
+          for (var i = 0; i < allGroups.length; i++) {
+            for (var j = 0; j < allGroups[i].length; j++) {
+              toRemove.push(allGroups[i][j]);
+            }
+          }
+
+          if (toRemove.length > 0) {
+            var boardEl = document.getElementById('board');
+            if (boardEl) {
+              for (var i = 0; i < toRemove.length; i++) {
+                var item = toRemove[i];
+                if (item.r >= HIDDEN_ROWS) {
+                  var cellIdx = (item.r - HIDDEN_ROWS) * COLS + item.c;
+                  var cell = boardEl.children[cellIdx];
+                  if (cell) {
+                    var puyo = cell.querySelector('.puyo');
+                    if (puyo) puyo.classList.add('popping');
+                  }
+                }
+              }
+            }
+
+            setTimeout(function() {
+              for (var i = 0; i < toRemove.length; i++) {
+                var item = toRemove[i];
+                if (board[item.r]) {
+                  board[item.r][item.c] = null;
+                }
+              }
+              safeRenderBoard();
+              callback({ poppedCount: toRemove.length, groups: allGroups, colorCount: Object.keys(colorsPopped).length });
+            }, 250);
+          } else {
+            callback({ poppedCount: 0, groups: [], colorCount: 0 });
+          }
+        } catch (e) {
+          console.error('FindPop error:', e);
+          callback({ poppedCount: 0, groups: [], colorCount: 0 });
+        }
+      }
+
+      function showChainDisplay(count) {
+        try {
+          var display = document.getElementById('chainDisplay');
+          if (!display) return;
+          
+          var chainClass = 'chain' + Math.min(count, 6);
+          display.className = 'chain-display';
+          
+          if (count >= 7) {
+            display.textContent = '✦ ' + count + '連鎖!! ✦';
+          } else if (count >= 5) {
+            display.textContent = '★ ' + count + '連鎖! ★';
+          } else {
+            display.textContent = count + '連鎖!';
+          }
+          
+          void display.offsetWidth;
+          display.classList.add('show', chainClass);
+          
+          setTimeout(function() {
+            display.classList.remove('show', chainClass);
+          }, 1000);
+        } catch (e) {
+          console.error('Chain display error:', e);
+        }
+      }
+
+      function showBonusPopup(bonus) {
+        try {
+          var popup = document.getElementById('bonusPopup');
+          if (!popup) return;
+          popup.textContent = '+' + bonus.toLocaleString();
+          popup.classList.remove('show');
+          void popup.offsetWidth;
+          popup.classList.add('show');
+        } catch (e) {
+          console.error('Bonus popup error:', e);
+        }
+      }
+
+      function createStarEffect(chainCount) {
+        try {
+          var overlay = document.getElementById('chainOverlay');
+          if (!overlay) return;
+          
+          var starCount = Math.min(chainCount * 4, 20);
+          var symbols = ['★', '✦', '✧', '⭐'];
+          
+          for (var i = 0; i < starCount; i++) {
+            var star = document.createElement('div');
+            star.className = 'star';
+            star.textContent = symbols[Math.floor(Math.random() * symbols.length)];
+            star.style.left = '50%';
+            star.style.top = '50%';
+            star.style.fontSize = (16 + Math.random() * 16) + 'px';
+            
+            var angle = (Math.PI * 2 / starCount) * i + Math.random() * 0.5;
+            var distance = 60 + Math.random() * 100;
+            var tx = Math.cos(angle) * distance;
+            var ty = Math.sin(angle) * distance;
+            
+            star.style.setProperty('--tx', tx + 'px');
+            star.style.setProperty('--ty', ty + 'px');
+            
+            overlay.appendChild(star);
+            
+            void star.offsetWidth;
+            star.classList.add('animate');
+            
+            (function(s) {
+              setTimeout(function() {
+                if (s && s.parentNode) s.parentNode.removeChild(s);
+              }, 800);
+            })(star);
+          }
+        } catch (e) {
+          console.error('Star effect error:', e);
+        }
+      }
+
+      function triggerScreenFlash() {
+        try {
+          var flash = document.getElementById('screenFlash');
+          if (!flash) return;
+          flash.classList.remove('flash');
+          void flash.offsetWidth;
+          flash.classList.add('flash');
+        } catch (e) {
+          console.error('Flash error:', e);
+        }
+      }
+
+      function startDropInterval() {
+        stopDropInterval();
+        dropInterval = setInterval(function() {
+          if (!isProcessing && !gameOver && currentPuyo) {
+            dropStep();
+          }
+        }, 800);
+      }
+
+      function stopDropInterval() {
+        if (dropInterval) {
+          clearInterval(dropInterval);
+          dropInterval = null;
+        }
+      }
+
+      function endGame() {
+        gameOver = true;
+        stopDropInterval();
+        var finalScoreEl = document.getElementById('finalScore');
+        var maxChainEl = document.getElementById('maxChain');
+        var overlayEl = document.getElementById('gameOverOverlay');
+        
+        if (finalScoreEl) finalScoreEl.textContent = score.toLocaleString();
+        if (maxChainEl) maxChainEl.textContent = maxChainCount;
+        if (overlayEl) overlayEl.classList.add('show');
+      }
+
+      function restartGame() {
+        gameOver = false;
+        gameStarted = true;
+        isPaused = false;
+        score = 0;
+        maxChainCount = 0;
+        currentChainCount = 0;
+        inputLocked = false;
+        isProcessing = false;
+        currentPuyo = null;
+        recommendedPlacement = null;
+
+        updateScoreDisplay(0);
+        updateComboDisplay(0, 0);
+
+        var overlayEl = document.getElementById('gameOverOverlay');
+        if (overlayEl) overlayEl.classList.remove('show');
+
+        var pauseBtn = document.getElementById('pauseBtn');
+        if (pauseBtn) pauseBtn.classList.remove('active');
+
+        initBoard();
+        nextPuyos = [];
+        spawnPuyo();
+        safeRenderBoard();
+        startDropInterval();
+      }
+
+      function setupControls() {
+        var lastTouchTime = {};
+
+        function createHandler(action, id) {
+          return function(e) {
+            if (e.type === 'touchstart') {
+              e.preventDefault();
+              lastTouchTime[id] = Date.now();
+              action();
+            } else if (e.type === 'click') {
+              var now = Date.now();
+              if (!lastTouchTime[id] || now - lastTouchTime[id] > 300) {
+                action();
+              }
+            }
+          };
+        }
+
+        var btnLeft = document.getElementById('btnLeft');
+        var btnRight = document.getElementById('btnRight');
+        var btnRotate = document.getElementById('btnRotate');
+        var btnDrop = document.getElementById('btnDrop');
+        var restartBtn = document.getElementById('restartBtn');
+
+        if (btnLeft) {
+          var leftHandler = createHandler(function() { movePuyo(-1); }, 'left');
+          btnLeft.addEventListener('touchstart', leftHandler, { passive: false });
+          btnLeft.addEventListener('click', leftHandler);
+        }
+
+        if (btnRight) {
+          var rightHandler = createHandler(function() { movePuyo(1); }, 'right');
+          btnRight.addEventListener('touchstart', rightHandler, { passive: false });
+          btnRight.addEventListener('click', rightHandler);
+        }
+
+        if (btnRotate) {
+          var rotateHandler = createHandler(function() { rotatePuyo(); }, 'rotate');
+          btnRotate.addEventListener('touchstart', rotateHandler, { passive: false });
+          btnRotate.addEventListener('click', rotateHandler);
+        }
+
+        if (btnDrop) {
+          var dropHandler = createHandler(function() { hardDrop(); }, 'drop');
+          btnDrop.addEventListener('touchstart', dropHandler, { passive: false });
+          btnDrop.addEventListener('click', dropHandler);
+        }
+
+        if (restartBtn) {
+          var restartHandler = createHandler(function() { restartGame(); }, 'restart');
+          restartBtn.addEventListener('touchstart', restartHandler, { passive: false });
+          restartBtn.addEventListener('click', restartHandler);
+        }
+
+        // STARTボタン
+        var startBtn = document.getElementById('startBtn');
+        if (startBtn) {
+          var startHandler = createHandler(function() { startGame(); }, 'start');
+          startBtn.addEventListener('touchstart', startHandler, { passive: false });
+          startBtn.addEventListener('click', startHandler);
+        }
+
+        // PAUSEボタン
+        var pauseBtn = document.getElementById('pauseBtn');
+        if (pauseBtn) {
+          var pauseHandler = createHandler(function() { togglePause(); }, 'pause');
+          pauseBtn.addEventListener('touchstart', pauseHandler, { passive: false });
+          pauseBtn.addEventListener('click', pauseHandler);
+        }
+
+        // RESUMEボタン
+        var resumeBtn = document.getElementById('resumeBtn');
+        if (resumeBtn) {
+          var resumeHandler = createHandler(function() { togglePause(); }, 'resume');
+          resumeBtn.addEventListener('touchstart', resumeHandler, { passive: false });
+          resumeBtn.addEventListener('click', resumeHandler);
+        }
+
+        // AIトグルボタン
+        var aiToggle = document.getElementById('aiToggle');
+        if (aiToggle) {
+          var aiToggleHandler = createHandler(function() {
+            aiGuideEnabled = !aiGuideEnabled;
+            aiToggle.classList.toggle('active', aiGuideEnabled);
+            if (aiGuideEnabled) {
+              calculateRecommendation();
+            } else {
+              recommendedPlacement = null;
+              safeRenderBoard();
+            }
+          }, 'aiToggle');
+          aiToggle.addEventListener('touchstart', aiToggleHandler, { passive: false });
+          aiToggle.addEventListener('click', aiToggleHandler);
+        }
+
+        // Swipe controls
+        var touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+        var gameBoard = document.getElementById('gameBoard');
+
+        if (gameBoard) {
+          gameBoard.addEventListener('touchstart', function(e) {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            touchStartTime = Date.now();
+          }, { passive: true });
+
+          gameBoard.addEventListener('touchend', function(e) {
+            var deltaX = e.changedTouches[0].clientX - touchStartX;
+            var deltaY = e.changedTouches[0].clientY - touchStartY;
+            var deltaTime = Date.now() - touchStartTime;
+
+            if (deltaTime < 300) {
+              if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 30) {
+                movePuyo(deltaX > 0 ? 1 : -1);
+              } else if (deltaY > 30) {
+                hardDrop();
+              } else if (deltaY < -30) {
+                rotatePuyo();
+              }
+            } else if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+              rotatePuyo();
+            }
+          }, { passive: true });
+        }
+
+        // Keyboard
+        document.addEventListener('keydown', function(e) {
+          // Escapeでポーズ切替
+          if (e.key === 'Escape') {
+            togglePause();
+            return;
+          }
+          // Enterでスタート
+          if (e.key === 'Enter' && !gameStarted) {
+            startGame();
+            return;
+          }
+          if (gameOver || !gameStarted || isPaused) return;
+          switch(e.key) {
+            case 'ArrowLeft': movePuyo(-1); break;
+            case 'ArrowRight': movePuyo(1); break;
+            case 'ArrowUp': rotatePuyo(); break;
+            case 'ArrowDown': dropStep(); break;
+            case ' ': hardDrop(); break;
+          }
+        });
+      }
+
+      document.body.addEventListener('touchmove', function(e) {
+        if (e.target.closest('.game-container')) e.preventDefault();
+      }, { passive: false });
+
+      function startGame() {
+        gameStarted = true;
+        gameOver = false;
+        isPaused = false;
+        score = 0;
+        maxChainCount = 0;
+        currentChainCount = 0;
+        recommendedPlacement = null;
+
+        var startOverlay = document.getElementById('startOverlay');
+        if (startOverlay) startOverlay.classList.add('hidden');
+
+        initBoard();
+        nextPuyos = [];
+        spawnPuyo();
+        safeRenderBoard();
+        startDropInterval();
+      }
+
+      function togglePause() {
+        if (!gameStarted || gameOver) return;
+
+        isPaused = !isPaused;
+        var pauseBtn = document.getElementById('pauseBtn');
+        var pauseOverlay = document.getElementById('pauseOverlay');
+
+        if (isPaused) {
+          stopDropInterval();
+          if (pauseBtn) pauseBtn.classList.add('active');
+          if (pauseOverlay) pauseOverlay.classList.add('show');
+        } else {
+          startDropInterval();
+          if (pauseBtn) pauseBtn.classList.remove('active');
+          if (pauseOverlay) pauseOverlay.classList.remove('show');
+        }
+      }
+
+      function init() {
+        initBoard();
+        setupControls();
+        safeRenderBoard();
+        // ゲームは開始されない - STARTボタン待ち
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -803,8 +803,8 @@
       // AIガイド用
       var aiGuideEnabled = false;
       var recommendedPlacement = null;
-      var AI_BEAM_WIDTH = 200;
-      var AI_DEPTH = 10;
+      var AI_BEAM_WIDTH = 80;
+      var AI_DEPTH = 8;
 
       // 連鎖表示用
       var chainDisplayTimeout = null;
@@ -992,235 +992,190 @@
       function evaluateBoard(b, chainResult) {
         var score = 0;
 
-        // 連鎖評価：2連鎖以上を非常に高く評価、1連鎖はペナルティ
+        // 連鎖評価：長連鎖を非常に高く評価
         if (chainResult.chainCount >= 2) {
-          // 2連鎖以上は大きな報酬（指数的）
-          score += Math.pow(chainResult.chainCount, 3) * 500;
+          score += Math.pow(chainResult.chainCount, 3.5) * 1000;
         } else if (chainResult.chainCount === 1) {
-          // 1連鎖は仕込みを壊すのでペナルティ（ただし緊急時は除く）
           score -= 500;
         }
 
         // 高さ計算
-        var maxHeight = 0;
         var heights = [];
         for (var c = 0; c < COLS; c++) {
-          var h = getColumnHeight(b, c);
-          heights.push(h);
-          if (h > maxHeight) maxHeight = h;
+          heights.push(getColumnHeight(b, c));
         }
 
         // 列ごとの高さペナルティ（中央ほど厳しく）
-        // 連鎖報酬(数万点)に対抗できる大きさに設定
-        var columnPenaltyWeight = [1, 3, 8, 8, 3, 1]; // 中央がさらに重い
-
+        var columnPenaltyWeight = [1, 2, 6, 6, 2, 1];
         for (var c = 0; c < COLS; c++) {
           var h = heights[c];
           if (h >= ROWS) {
-            if (c === 2 || c === 3) {
-              return -500000; // 中央は絶対ダメ
-            } else {
-              return -200000;
-            }
-          } else if (h >= ROWS - 1) { // 11段
-            score -= 15000 * columnPenaltyWeight[c];
-          } else if (h >= ROWS - 2) { // 10段
-            score -= 8000 * columnPenaltyWeight[c];
-          } else if (h >= ROWS - 3) { // 9段
+            return (c === 2 || c === 3) ? -500000 : -200000;
+          } else if (h >= 10) {
+            score -= 12000 * columnPenaltyWeight[c];
+          } else if (h >= 8) {
             score -= 4000 * columnPenaltyWeight[c];
-          } else if (h >= ROWS - 4) { // 8段
-            score -= 2000 * columnPenaltyWeight[c];
           } else if (h >= 6) {
-            score -= 500 * columnPenaltyWeight[c] * (h - 5);
+            score -= 800 * columnPenaltyWeight[c];
           }
         }
 
-        // グループ分析
+        // 高速グループ分析（スタックベース）
         var visited = [];
         for (var r = 0; r < ROWS + HIDDEN_ROWS; r++) {
           visited.push(new Array(COLS).fill(false));
         }
 
-        var groups = [];
-        function floodFillGroup(r, c, color, group) {
-          if (r < 0 || r >= ROWS + HIDDEN_ROWS || c < 0 || c >= COLS) return;
-          if (!b[r] || visited[r][c] || b[r][c] !== color) return;
-          visited[r][c] = true;
-          group.push({ r: r, c: c });
-          floodFillGroup(r - 1, c, color, group);
-          floodFillGroup(r + 1, c, color, group);
-          floodFillGroup(r, c - 1, color, group);
-          floodFillGroup(r, c + 1, color, group);
-        }
+        var threeGroups = [];
+        var twoGroups = [];
+        var colorLayers = {}; // 各色の高さ別グループ
 
         for (var r = 0; r < ROWS + HIDDEN_ROWS; r++) {
           for (var c = 0; c < COLS; c++) {
             if (!visited[r][c] && b[r] && b[r][c]) {
+              var color = b[r][c];
+              var stack = [[r, c]];
               var group = [];
-              floodFillGroup(r, c, b[r][c], group);
-              if (group.length > 0) {
-                // グループの最下行を計算
-                var maxRow = 0;
-                for (var gi = 0; gi < group.length; gi++) {
-                  if (group[gi].r > maxRow) maxRow = group[gi].r;
-                }
-                groups.push({ color: b[r][c], cells: group, size: group.length, bottomRow: maxRow });
+              var minRow = ROWS + HIDDEN_ROWS;
+              var maxRow = 0;
+
+              while (stack.length > 0) {
+                var pos = stack.pop();
+                var pr = pos[0], pc = pos[1];
+                if (pr < 0 || pr >= ROWS + HIDDEN_ROWS || pc < 0 || pc >= COLS) continue;
+                if (visited[pr][pc] || !b[pr] || b[pr][pc] !== color) continue;
+                visited[pr][pc] = true;
+                group.push([pr, pc]);
+                if (pr < minRow) minRow = pr;
+                if (pr > maxRow) maxRow = pr;
+                stack.push([pr - 1, pc], [pr + 1, pc], [pr, pc - 1], [pr, pc + 1]);
+              }
+
+              var size = group.length;
+              if (size === 3) {
+                threeGroups.push({ cells: group, minRow: minRow, maxRow: maxRow, color: color });
+              } else if (size === 2) {
+                twoGroups.push({ cells: group, minRow: minRow, maxRow: maxRow, color: color });
+              }
+
+              // 色別レイヤー記録（連鎖構造分析用）
+              if (size >= 2) {
+                if (!colorLayers[color]) colorLayers[color] = [];
+                colorLayers[color].push({ minRow: minRow, maxRow: maxRow, size: size });
               }
             }
           }
         }
 
-        // グループをサイズと位置で分類
-        var threeGroups = [];
-        var twoGroups = [];
-        for (var i = 0; i < groups.length; i++) {
-          var g = groups[i];
-          if (g.size === 3) threeGroups.push(g);
-          else if (g.size === 2) twoGroups.push(g);
-        }
-
-        // 3個グループは連鎖の核心（非常に重要）
+        // 3個グループ評価（連鎖の種）- より高い報酬
+        score += threeGroups.length * 800;
         for (var i = 0; i < threeGroups.length; i++) {
-          var g = threeGroups[i];
-          score += 400;
-          // 下にあるほど安定（土台）
-          score += g.bottomRow * 15;
+          // 下にあるほど安定（連鎖の土台になる）
+          score += threeGroups[i].maxRow * 30;
         }
 
-        // 複数の3個グループがあればさらにボーナス
-        if (threeGroups.length >= 2) {
-          score += threeGroups.length * 300;
+        // 2個グループ（連鎖に育つ可能性）
+        score += twoGroups.length * 150;
+
+        // 色別レイヤー分析：同色グループが縦に積み重なっている = 連鎖構造
+        var layerBonus = 0;
+        for (var color in colorLayers) {
+          var layers = colorLayers[color];
+          if (layers.length >= 2) {
+            // 高さでソート
+            layers.sort(function(a, b) { return b.maxRow - a.maxRow; });
+            // 縦に積み重なっているか確認
+            for (var i = 0; i < layers.length - 1; i++) {
+              var lower = layers[i];
+              var upper = layers[i + 1];
+              // 下のグループの上に別のグループがある = 連鎖の可能性
+              if (upper.maxRow < lower.minRow && lower.minRow - upper.maxRow <= 4) {
+                layerBonus += 400;
+                // 3個グループが重なっている場合は特に高評価
+                if (lower.size === 3 || upper.size === 3) {
+                  layerBonus += 300;
+                }
+              }
+            }
+          }
         }
+        score += layerBonus;
 
-        // 2個グループも評価
-        score += twoGroups.length * 60;
-
-        // ===== 連鎖ポテンシャル評価 =====
-        // 各3個グループが消えた時の連鎖をシミュレート
+        // 連鎖ポテンシャル（3個グループを消した時の連鎖数）
         var maxPotentialChain = 0;
-        for (var i = 0; i < threeGroups.length; i++) {
+        var potentialSum = 0;
+        var simCount = Math.min(threeGroups.length, 3);
+        for (var i = 0; i < simCount; i++) {
           var g = threeGroups[i];
           var testBoard = cloneBoard(b);
+          // 3個グループに1個追加して消す想定
           for (var j = 0; j < g.cells.length; j++) {
-            testBoard[g.cells[j].r][g.cells[j].c] = null;
+            testBoard[g.cells[j][0]][g.cells[j][1]] = null;
           }
           var potentialResult = aiSimulateChains(testBoard);
           if (potentialResult.chainCount > maxPotentialChain) {
             maxPotentialChain = potentialResult.chainCount;
           }
+          potentialSum += potentialResult.chainCount;
         }
-        // 連鎖ポテンシャルを非常に高く評価（これが連鎖構築の核心）
+        // 連鎖ポテンシャルを非常に高く評価
         if (maxPotentialChain >= 1) {
-          score += Math.pow(maxPotentialChain + 1, 3) * 200;
+          score += Math.pow(maxPotentialChain + 1, 3.5) * 500;
+        }
+        // 複数の連鎖ポテンシャルがある場合もボーナス
+        if (potentialSum >= 3) {
+          score += potentialSum * 200;
         }
 
-        // ===== 階段積みパターン検出 =====
-        // 左から右に向かって高さが増加する形を評価
-        var staircaseBonus = 0;
-        var ascending = true;
-        for (var c = 0; c < COLS - 1; c++) {
-          var diff = heights[c + 1] - heights[c];
-          if (diff >= 0 && diff <= 2) {
-            staircaseBonus += 30;
-          } else if (diff < 0) {
-            ascending = false;
-          }
+        // GTR風パターン：左端か右端に2-3列の階段
+        var leftStair = 0, rightStair = 0;
+        for (var c = 0; c < 3; c++) {
+          if (c < COLS - 1 && heights[c] < heights[c + 1]) leftStair++;
         }
-        if (ascending && heights[0] > 0) {
-          staircaseBonus += 100;
+        for (var c = COLS - 1; c > COLS - 4; c--) {
+          if (c > 0 && heights[c] < heights[c - 1]) rightStair++;
         }
-        score += staircaseBonus;
+        if (leftStair >= 2 || rightStair >= 2) {
+          score += 600;
+        }
 
-        // ===== 縦の連鎖構造評価 =====
-        // 同じ列で異なる色のグループが重なっている = 連鎖になりやすい
+        // 色の縦並びボーナス（より強く評価）
         for (var c = 0; c < COLS; c++) {
-          var colGroups = [];
-          for (var i = 0; i < groups.length; i++) {
-            for (var j = 0; j < groups[i].cells.length; j++) {
-              if (groups[i].cells[j].c === c) {
-                colGroups.push({ color: groups[i].color, row: groups[i].cells[j].r, size: groups[i].size });
-                break;
-              }
-            }
-          }
-          // 同じ列に複数グループがあれば連鎖候補
-          if (colGroups.length >= 2) {
-            var uniqueColors = {};
-            for (var i = 0; i < colGroups.length; i++) {
-              uniqueColors[colGroups[i].color] = true;
-            }
-            score += Object.keys(uniqueColors).length * 50;
-          }
-        }
-
-        // ===== 色の分布評価 =====
-        // 同じ色が近くに集まっているほど良い
-        var colorPositions = {};
-        for (var r = 0; r < ROWS + HIDDEN_ROWS; r++) {
-          for (var c = 0; c < COLS; c++) {
+          var lastColor = null;
+          var streak = 0;
+          for (var r = ROWS + HIDDEN_ROWS - 1; r >= 0; r--) {
             if (b[r] && b[r][c]) {
-              if (!colorPositions[b[r][c]]) colorPositions[b[r][c]] = [];
-              colorPositions[b[r][c]].push({ r: r, c: c });
-            }
-          }
-        }
-
-        // ===== 発火点の準備状況 =====
-        // 3個グループの上に空きがあり、1手で消せる状態を評価
-        for (var i = 0; i < threeGroups.length; i++) {
-          var g = threeGroups[i];
-          var canTrigger = false;
-          for (var j = 0; j < g.cells.length; j++) {
-            var cell = g.cells[j];
-            // この位置の上に置けるか
-            if (cell.r >= 1) {
-              var above = cell.r - 1;
-              if (!b[above] || !b[above][cell.c]) {
-                // 上が空いている
-                canTrigger = true;
-                break;
+              if (b[r][c] === lastColor) {
+                streak++;
+                if (streak === 2) score += 50;
+                else if (streak === 3) score += 120;
+              } else {
+                lastColor = b[r][c];
+                streak = 1;
               }
-            }
-          }
-          if (canTrigger && maxPotentialChain >= 1) {
-            score += 150; // 発火可能で連鎖が続く
+            } else break;
           }
         }
 
-        // ===== 平坦すぎるとダメ =====
-        // ある程度の高低差があった方が連鎖しやすい
-        var totalDiff = 0;
-        for (var c = 0; c < COLS - 1; c++) {
-          totalDiff += Math.abs(heights[c] - heights[c + 1]);
-        }
-        if (totalDiff < 3 && maxHeight > 3) {
-          score -= 50; // 平坦すぎ
-        }
-
-        // ===== 盤面占有率ペナルティ =====
-        var totalCells = COLS * ROWS; // 6 * 12 = 72
+        // 占有率計算
         var filledCells = 0;
         for (var r = HIDDEN_ROWS; r < ROWS + HIDDEN_ROWS; r++) {
           for (var c = 0; c < COLS; c++) {
             if (b[r] && b[r][c]) filledCells++;
           }
         }
-        var occupancyRate = filledCells / totalCells;
+        var occupancyRate = filledCells / 72;
 
-        // 占有率が高い時は1連鎖ペナルティを解除して消すことを優先
-        if (occupancyRate >= 0.50 && chainResult.chainCount === 1) {
-          score += 2000; // ペナルティ解除＋ボーナス
+        // 占有率が高い時に消すことを促進
+        if (occupancyRate >= 0.45 && chainResult.chainCount >= 1) {
+          score += chainResult.chainCount * 2000;
         }
 
-        // 占有率ペナルティ（連鎖報酬に対抗できる大きさ）
-        if (occupancyRate >= 0.65) {
-          score -= 80000;
-        } else if (occupancyRate >= 0.55) {
-          score -= 40000;
+        // 占有率ペナルティ
+        if (occupancyRate >= 0.60) {
+          score -= 60000;
         } else if (occupancyRate >= 0.50) {
           score -= 20000;
-        } else if (occupancyRate >= 0.45) {
-          score -= 10000;
         } else if (occupancyRate >= 0.40) {
           score -= 5000;
         }

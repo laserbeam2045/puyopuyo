@@ -803,8 +803,8 @@
       // AIガイド用
       var aiGuideEnabled = false;
       var recommendedPlacement = null;
-      var AI_BEAM_WIDTH = 150;
-      var AI_DEPTH = 4;
+      var AI_BEAM_WIDTH = 200;
+      var AI_DEPTH = 10;
 
       // 連鎖表示用
       var chainDisplayTimeout = null;
@@ -1441,7 +1441,7 @@
 
       function spawnPuyo() {
         try {
-          while (nextPuyos.length < 5) {
+          while (nextPuyos.length < 11) {
             nextPuyos.push(generatePuyo());
           }
 
@@ -1477,7 +1477,7 @@
         
         preview.innerHTML = '';
         
-        for (var i = 0; i < 4 && i < nextPuyos.length; i++) {
+        for (var i = 0; i < 2 && i < nextPuyos.length; i++) {
           var puyoData = nextPuyos[i];
           if (!puyoData) continue;
           

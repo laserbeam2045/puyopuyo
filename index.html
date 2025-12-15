@@ -162,12 +162,7 @@
       gap: 0;
       padding: 4px;
       border-radius: 8px;
-      background:
-        linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px),
-        rgba(0,0,0,0.4);
-      background-size: 36px 36px, 36px 36px, 100% 100%;
-      background-position: 4px 4px, 4px 4px, 0 0;
+      background: rgba(0,0,0,0.4);
     }
 
     .cell {
@@ -178,16 +173,15 @@
       justify-content: center;
       position: relative;
       overflow: visible;
+      border: 1px solid rgba(255,255,255,0.06);
+      box-sizing: border-box;
     }
 
     .puyo {
       width: 34px;
       height: 34px;
       border-radius: 50%;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
+      flex-shrink: 0;
     }
 
     .puyo::before {
@@ -260,29 +254,11 @@
       box-shadow: inset -3px -3px 6px rgba(0,0,0,0.3), inset 3px 3px 6px rgba(255,255,255,0.4);
     }
 
-    /* 隣接ぷよとの接続表示 - 接続方向の角を四角にしてつなげる */
-    .puyo.connect-top { height: 36px; transform: translate(-50%, calc(-50% - 1px)); border-top-left-radius: 0; border-top-right-radius: 0; }
-    .puyo.connect-bottom { height: 36px; transform: translate(-50%, calc(-50% + 1px)); border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-    .puyo.connect-left { width: 36px; transform: translate(calc(-50% - 1px), -50%); border-top-left-radius: 0; border-bottom-left-radius: 0; }
-    .puyo.connect-right { width: 36px; transform: translate(calc(-50% + 1px), -50%); border-top-right-radius: 0; border-bottom-right-radius: 0; }
-
-    /* 上下両方向に接続 */
-    .puyo.connect-top.connect-bottom { height: 38px; transform: translate(-50%, -50%); }
-    /* 左右両方向に接続 */
-    .puyo.connect-left.connect-right { width: 38px; transform: translate(-50%, -50%); }
-
-    /* 複合接続（L字型） */
-    .puyo.connect-top.connect-left { width: 36px; height: 36px; transform: translate(calc(-50% - 1px), calc(-50% - 1px)); }
-    .puyo.connect-top.connect-right { width: 36px; height: 36px; transform: translate(calc(-50% + 1px), calc(-50% - 1px)); }
-    .puyo.connect-bottom.connect-left { width: 36px; height: 36px; transform: translate(calc(-50% - 1px), calc(-50% + 1px)); }
-    .puyo.connect-bottom.connect-right { width: 36px; height: 36px; transform: translate(calc(-50% + 1px), calc(-50% + 1px)); }
-    /* 3方向接続 */
-    .puyo.connect-top.connect-bottom.connect-left { width: 36px; height: 38px; transform: translate(calc(-50% - 1px), -50%); }
-    .puyo.connect-top.connect-bottom.connect-right { width: 36px; height: 38px; transform: translate(calc(-50% + 1px), -50%); }
-    .puyo.connect-left.connect-right.connect-top { width: 38px; height: 36px; transform: translate(-50%, calc(-50% - 1px)); }
-    .puyo.connect-left.connect-right.connect-bottom { width: 38px; height: 36px; transform: translate(-50%, calc(-50% + 1px)); }
-    /* 4方向接続 */
-    .puyo.connect-top.connect-bottom.connect-left.connect-right { width: 38px; height: 38px; transform: translate(-50%, -50%); }
+    /* 隣接ぷよとの接続表示 - 接続方向の角を四角にする */
+    .puyo.connect-top { border-top-left-radius: 0; border-top-right-radius: 0; }
+    .puyo.connect-bottom { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+    .puyo.connect-left { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+    .puyo.connect-right { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 
     /* 接続時はフラットな色に変更して境目を消す */
     .puyo[class*="connect-"] { box-shadow: none; }
@@ -297,8 +273,8 @@
     }
 
     @keyframes fall {
-      from { transform: translate(-50%, calc(-50% - 36px)); }
-      to { transform: translate(-50%, -50%); }
+      from { margin-top: -36px; }
+      to { margin-top: 0; }
     }
 
     .puyo.connecting {
@@ -316,9 +292,9 @@
     }
 
     @keyframes pop {
-      0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-      50% { transform: translate(-50%, -50%) scale(1.3); opacity: 0.8; }
-      100% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+      0% { opacity: 1; filter: brightness(1); }
+      50% { opacity: 0.8; filter: brightness(1.5); }
+      100% { opacity: 0; filter: brightness(2); }
     }
 
     .controls {
@@ -720,8 +696,8 @@
     }
 
     @keyframes ghostPulse {
-      0%, 100% { opacity: 0.25; transform: translate(-50%, -50%) scale(0.95); }
-      50% { opacity: 0.45; transform: translate(-50%, -50%) scale(1); }
+      0%, 100% { opacity: 0.25; }
+      50% { opacity: 0.45; }
     }
 
     @media (max-height: 650px) {

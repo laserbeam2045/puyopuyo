@@ -553,6 +553,33 @@
     return score;
   }
 
+  // 盤面の危険度を計算（0.0〜1.0）
+  function calculateDanger(state) {
+    const heights = [];
+    for (let c = 0; c < COLS; c++) {
+      heights.push(state.getColumnHeight(c));
+    }
+    const maxHeight = Math.max(...heights);
+    const deathColumnHeight = heights[2]; // 中央列（死亡判定列）
+
+    // 危険度の計算
+    // - 最大高さが9以上で危険度上昇
+    // - 死亡列（列2）が特に重要
+    let danger = 0;
+
+    // 最大高さによる危険度（8段以上で上昇開始）
+    if (maxHeight >= 8) {
+      danger += (maxHeight - 7) * 0.15; // 8段で0.15, 9段で0.3, 10段で0.45...
+    }
+
+    // 死亡列の危険度（6段以上で上昇）
+    if (deathColumnHeight >= 6) {
+      danger += (deathColumnHeight - 5) * 0.2; // 6段で0.2, 7段で0.4...
+    }
+
+    return Math.min(1.0, danger); // 0.0〜1.0にクランプ
+  }
+
   // 基本盤面評価（CNN以外）
   function evaluateBoardBase(state) {
     if (state.gameOver) {
@@ -714,15 +741,23 @@
 
           if (result.invalid) continue;
 
-          // 連鎖スコア（小さい連鎖は常にペナルティ、大連鎖のみボーナス）
+          // 連鎖スコア（危険度に応じて評価を変える）
           let chainScore = 0;
           if (result.chainCount > 0) {
-            if (result.chainCount >= 10) {
-              // 10連鎖以上のみボーナス
+            const danger = calculateDanger(node.state); // 連鎖発動前の危険度
+
+            if (danger >= 0.5) {
+              // 危険な状態：連鎖を発動して盤面を下げるべき
+              // 連鎖数に応じてボーナス
+              chainScore = Math.pow(result.chainCount, 2) * EVAL_WEIGHTS.CHAIN_POWER * (1 + danger);
+            } else if (result.chainCount >= 8) {
+              // 安全だけど大連鎖（8連鎖以上）：発動OK
               chainScore = Math.pow(result.chainCount, 3) * EVAL_WEIGHTS.CHAIN_POWER;
             } else {
-              // 9連鎖以下は常にペナルティ（盤面を育てたい）
-              chainScore = -500 * result.chainCount;
+              // 安全で小連鎖：潜在連鎖を減らすのでペナルティ
+              // ただし危険度が上がるにつれペナルティを軽減
+              const penaltyFactor = 1 - danger * 1.5; // danger=0で1.0, danger=0.5で0.25
+              chainScore = -300 * result.chainCount * Math.max(0, penaltyFactor);
             }
           }
 

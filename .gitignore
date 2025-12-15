@@ -9,3 +9,4 @@ analyze.js
 train*.js
 generate_potential_data*.js
 package*.json
+.claude/*

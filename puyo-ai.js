@@ -553,6 +553,41 @@
     return score;
   }
 
+  // 盤面のぷよ数をカウント
+  function countPuyos(state) {
+    let count = 0;
+    for (let r = 0; r < TOTAL_ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (state.board[r][c] !== -1) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }
+
+  // 潜在連鎖効率を計算（潜在連鎖数 / ぷよ数）
+  // 高いほど効率的な盤面（少ないぷよで大きな連鎖が期待できる）
+  function calculateChainEfficiency(state) {
+    const puyoCount = countPuyos(state);
+    if (puyoCount === 0) return 0;
+
+    // CNN予測を使用
+    let potentialChain = 0;
+    if (useCNN && potentialModel) {
+      const result = predictPotentialCNN(state);
+      if (result !== null) {
+        potentialChain = result.predictedChain;
+      }
+    }
+
+    // 効率 = 潜在連鎖数 / (ぷよ数 / 4)
+    // 4で割るのは、1連鎖に最低4個必要なため
+    // 効率1.0 = ぷよ数に見合った連鎖数
+    // 効率2.0 = ぷよ数の2倍の連鎖効率（とても良い形）
+    return potentialChain / (puyoCount / 4);
+  }
+
   // 盤面の危険度を計算（0.0〜1.0）
   function calculateDanger(state) {
     const heights = [];
@@ -560,24 +595,16 @@
       heights.push(state.getColumnHeight(c));
     }
     const maxHeight = Math.max(...heights);
-    const deathColumnHeight = heights[2]; // 中央列（死亡判定列）
+    const deathColumnHeight = heights[2];
 
-    // 危険度の計算
-    // - 最大高さが9以上で危険度上昇
-    // - 死亡列（列2）が特に重要
     let danger = 0;
-
-    // 最大高さによる危険度（8段以上で上昇開始）
     if (maxHeight >= 8) {
-      danger += (maxHeight - 7) * 0.15; // 8段で0.15, 9段で0.3, 10段で0.45...
+      danger += (maxHeight - 7) * 0.15;
     }
-
-    // 死亡列の危険度（6段以上で上昇）
     if (deathColumnHeight >= 6) {
-      danger += (deathColumnHeight - 5) * 0.2; // 6段で0.2, 7段で0.4...
+      danger += (deathColumnHeight - 5) * 0.2;
     }
-
-    return Math.min(1.0, danger); // 0.0〜1.0にクランプ
+    return Math.min(1.0, danger);
   }
 
   // 基本盤面評価（CNN以外）
@@ -741,23 +768,31 @@
 
           if (result.invalid) continue;
 
-          // 連鎖スコア（危険度に応じて評価を変える）
+          // 連鎖スコア（効率と危険度に応じて評価）
           let chainScore = 0;
           if (result.chainCount > 0) {
-            const danger = calculateDanger(node.state); // 連鎖発動前の危険度
+            const efficiency = calculateChainEfficiency(node.state); // 連鎖発動前の効率
+            const danger = calculateDanger(node.state); // 危険度
 
-            if (danger >= 0.5) {
-              // 危険な状態：連鎖を発動して盤面を下げるべき
-              // 連鎖数に応じてボーナス
-              chainScore = Math.pow(result.chainCount, 2) * EVAL_WEIGHTS.CHAIN_POWER * (1 + danger);
-            } else if (result.chainCount >= 8) {
-              // 安全だけど大連鎖（8連鎖以上）：発動OK
+            // 効率が低い（< 0.8）: 消して盤面をリセットすべき
+            // 効率が高い（>= 1.2）: 育てるべき、小連鎖はペナルティ
+            // 中間: 状況に応じて判断
+
+            if (danger >= 0.6) {
+              // 危険な状態：連鎖を発動して盤面を下げる
+              chainScore = Math.pow(result.chainCount, 2) * EVAL_WEIGHTS.CHAIN_POWER * 2;
+            } else if (efficiency < 0.8) {
+              // 効率が悪い盤面：消してリセットする方が良い
+              chainScore = result.chainCount * EVAL_WEIGHTS.CHAIN_POWER * 0.5;
+            } else if (result.chainCount >= 6 && efficiency >= 1.0) {
+              // 効率が良くて大連鎖：発動OK
               chainScore = Math.pow(result.chainCount, 3) * EVAL_WEIGHTS.CHAIN_POWER;
+            } else if (efficiency >= 1.2) {
+              // 効率がとても良い：小連鎖は避けて育てる
+              chainScore = -200 * result.chainCount * efficiency;
             } else {
-              // 安全で小連鎖：潜在連鎖を減らすのでペナルティ
-              // ただし危険度が上がるにつれペナルティを軽減
-              const penaltyFactor = 1 - danger * 1.5; // danger=0で1.0, danger=0.5で0.25
-              chainScore = -300 * result.chainCount * Math.max(0, penaltyFactor);
+              // 中間的な効率：軽いペナルティ
+              chainScore = -100 * result.chainCount;
             }
           }
 

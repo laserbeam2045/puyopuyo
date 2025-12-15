@@ -139,10 +139,11 @@
       const mainHeight = this.getColumnHeight(mainCol);
       const subHeight = this.getColumnHeight(subCol);
 
+      // 隠し行（インデックス0）への配置を禁止するため、ROWSを使用
       if (mainCol === subCol) {
-        return mainHeight + 2 <= TOTAL_ROWS;
+        return mainHeight + 2 <= ROWS;
       }
-      return mainHeight + 1 <= TOTAL_ROWS && subHeight + 1 <= TOTAL_ROWS;
+      return mainHeight + 1 <= ROWS && subHeight + 1 <= ROWS;
     }
 
     getValidActions() {

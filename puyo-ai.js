@@ -344,7 +344,7 @@
 
   function evaluateBoardFallback(state) {
     if (state.gameOver) {
-      return -100000;
+      return -1000000;
     }
 
     let score = evaluateBoardBase(state);
@@ -610,7 +610,7 @@
   // 基本盤面評価（CNN以外）
   function evaluateBoardBase(state) {
     if (state.gameOver) {
-      return -100000;
+      return -1000000;
     }
 
     let score = 0;
@@ -768,33 +768,13 @@
 
           if (result.invalid) continue;
 
-          // 連鎖スコア（効率と危険度に応じて評価）
+          // 連鎖スコア（10連鎖以上に指数的報酬）
           let chainScore = 0;
-          if (result.chainCount > 0) {
-            const efficiency = calculateChainEfficiency(node.state); // 連鎖発動前の効率
-            const danger = calculateDanger(node.state); // 危険度
-
-            // 効率が低い（< 0.8）: 消して盤面をリセットすべき
-            // 効率が高い（>= 1.2）: 育てるべき、小連鎖はペナルティ
-            // 中間: 状況に応じて判断
-
-            if (danger >= 0.6) {
-              // 危険な状態：連鎖を発動して盤面を下げる
-              chainScore = Math.pow(result.chainCount, 2) * EVAL_WEIGHTS.CHAIN_POWER * 2;
-            } else if (efficiency < 0.8) {
-              // 効率が悪い盤面：消してリセットする方が良い
-              chainScore = result.chainCount * EVAL_WEIGHTS.CHAIN_POWER * 0.5;
-            } else if (result.chainCount >= 6 && efficiency >= 1.0) {
-              // 効率が良くて大連鎖：発動OK
-              chainScore = Math.pow(result.chainCount, 3) * EVAL_WEIGHTS.CHAIN_POWER;
-            } else if (efficiency >= 1.2) {
-              // 効率がとても良い：小連鎖は避けて育てる
-              chainScore = -200 * result.chainCount * efficiency;
-            } else {
-              // 中間的な効率：軽いペナルティ
-              chainScore = -100 * result.chainCount;
-            }
+          if (result.chainCount >= 10) {
+            // 10連鎖以上：指数的ボーナス
+            chainScore = Math.pow(result.chainCount, 3) * EVAL_WEIGHTS.CHAIN_POWER;
           }
+          // 9連鎖以下：報酬もペナルティもなし（CNNの盤面評価に任せる）
 
           const newMaxChain = Math.max(node.maxChain, result.chainCount);
 
@@ -815,7 +795,7 @@
       // まず軽量評価でソート
       for (const candidate of candidates) {
         if (candidate.state.gameOver) {
-          candidate.finalScore = candidate.totalChainScore - 100000;
+          candidate.finalScore = candidate.totalChainScore - 1000000;
         } else if (isLastDepth) {
           // 最終深度: フォールバック評価を使用
           candidate.finalScore = candidate.totalChainScore + evaluateBoardFallback(candidate.state);

@@ -157,19 +157,19 @@
 
     .board-inner {
       display: grid;
-      grid-template-columns: repeat(6, 38px);
-      grid-template-rows: repeat(12, 38px);
-      gap: 2px;
+      grid-template-columns: repeat(6, 36px);
+      grid-template-rows: repeat(12, 36px);
+      gap: 0;
       background: rgba(0,0,0,0.4);
       padding: 4px;
       border-radius: 8px;
     }
 
     .cell {
-      width: 38px;
-      height: 38px;
-      background: rgba(255,255,255,0.05);
-      border-radius: 6px;
+      width: 36px;
+      height: 36px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -177,8 +177,8 @@
     }
 
     .puyo {
-      width: 32px;
-      height: 32px;
+      width: 34px;
+      height: 34px;
       border-radius: 50%;
       position: absolute;
     }
@@ -227,27 +227,60 @@
 
     .puyo.red {
       background: radial-gradient(circle at 30% 30%, #ff8a8a, #ff4757, #c0392b);
-      box-shadow: inset -3px -3px 6px rgba(0,0,0,0.3), inset 3px 3px 6px rgba(255,255,255,0.4), 0 0 12px rgba(255,71,87,0.6);
+      box-shadow: inset -3px -3px 6px rgba(0,0,0,0.3), inset 3px 3px 6px rgba(255,255,255,0.4);
     }
 
     .puyo.green {
       background: radial-gradient(circle at 30% 30%, #98fb98, #32cd32, #228b22);
-      box-shadow: inset -3px -3px 6px rgba(0,0,0,0.3), inset 3px 3px 6px rgba(255,255,255,0.4), 0 0 12px rgba(50,205,50,0.6);
+      box-shadow: inset -3px -3px 6px rgba(0,0,0,0.3), inset 3px 3px 6px rgba(255,255,255,0.4);
     }
 
     .puyo.yellow {
       background: radial-gradient(circle at 30% 30%, #fff56d, #ffd700, #daa520);
-      box-shadow: inset -3px -3px 6px rgba(0,0,0,0.2), inset 3px 3px 6px rgba(255,255,255,0.5), 0 0 12px rgba(255,215,0,0.6);
+      box-shadow: inset -3px -3px 6px rgba(0,0,0,0.2), inset 3px 3px 6px rgba(255,255,255,0.5);
     }
 
     .puyo.blue {
       background: radial-gradient(circle at 30% 30%, #87ceff, #4169e1, #0000cd);
-      box-shadow: inset -3px -3px 6px rgba(0,0,0,0.3), inset 3px 3px 6px rgba(255,255,255,0.4), 0 0 12px rgba(65,105,225,0.6);
+      box-shadow: inset -3px -3px 6px rgba(0,0,0,0.3), inset 3px 3px 6px rgba(255,255,255,0.4);
     }
 
     .puyo.purple {
       background: radial-gradient(circle at 30% 30%, #dda0dd, #da70d6, #9932cc);
-      box-shadow: inset -3px -3px 6px rgba(0,0,0,0.3), inset 3px 3px 6px rgba(255,255,255,0.4), 0 0 12px rgba(218,112,214,0.6);
+      box-shadow: inset -3px -3px 6px rgba(0,0,0,0.3), inset 3px 3px 6px rgba(255,255,255,0.4);
+    }
+
+    /* 隣接ぷよとの接続表示 - 接続方向の角を四角にしてつなげる */
+    .puyo.connect-top { top: -1px; height: 36px; border-top-left-radius: 0; border-top-right-radius: 0; }
+    .puyo.connect-bottom { bottom: -1px; top: auto; height: 36px; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+    .puyo.connect-left { left: -1px; width: 36px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+    .puyo.connect-right { right: -1px; left: auto; width: 36px; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+
+    /* 接続時はフラットな色に変更して境目を消す */
+    .puyo[class*="connect-"] { box-shadow: none; }
+    .puyo.red[class*="connect-"] { background: #e74c3c; }
+    .puyo.green[class*="connect-"] { background: #27ae60; }
+    .puyo.yellow[class*="connect-"] { background: #f1c40f; }
+    .puyo.blue[class*="connect-"] { background: #3498db; }
+    .puyo.purple[class*="connect-"] { background: #9b59b6; }
+
+    .puyo.falling {
+      animation: fall 0.12s ease-in;
+    }
+
+    @keyframes fall {
+      from { transform: translateY(-100%); }
+      to { transform: translateY(0); }
+    }
+
+    .puyo.connecting {
+      animation: connect 0.15s ease-out;
+    }
+
+    @keyframes connect {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
     }
 
     .puyo.popping {
@@ -664,9 +697,9 @@
     }
 
     @media (max-height: 650px) {
-      .board-inner { grid-template-columns: repeat(6, 32px); grid-template-rows: repeat(12, 32px); }
-      .cell { width: 32px; height: 32px; }
-      .puyo { width: 27px; height: 27px; }
+      .board-inner { grid-template-columns: repeat(6, 30px); grid-template-rows: repeat(12, 30px); }
+      .cell { width: 30px; height: 30px; }
+      .puyo { width: 30px; height: 30px; }
       .puyo::before { width: 6px; height: 4px; top: 4px; left: 6px; }
       .puyo::after { width: 3px; height: 2px; top: 6px; right: 7px; }
       .puyo.small { width: 20px; height: 20px; }
@@ -677,9 +710,9 @@
     }
 
     @media (max-height: 550px) {
-      .board-inner { grid-template-columns: repeat(6, 28px); grid-template-rows: repeat(12, 28px); }
-      .cell { width: 28px; height: 28px; }
-      .puyo { width: 24px; height: 24px; }
+      .board-inner { grid-template-columns: repeat(6, 26px); grid-template-rows: repeat(12, 26px); }
+      .cell { width: 26px; height: 26px; }
+      .puyo { width: 26px; height: 26px; }
       .puyo.small { width: 18px; height: 18px; }
       .side-panel { width: 40px; }
       .control-btn { height: 38px; font-size: 1.1rem; }
@@ -792,6 +825,12 @@
       // 連打防止用
       var inputLocked = false;
       var INPUT_LOCK_TIME = 50;
+
+      // 落下アニメーション用
+      var fallingPuyos = {};
+
+      // 接続アニメーション用（前回の接続状態を記録）
+      var prevConnections = {};
 
       function lockInput() {
         inputLocked = true;
@@ -999,17 +1038,38 @@
       function renderBoard() {
         var boardEl = document.getElementById('board');
         if (!boardEl) return;
-        
+
         boardEl.innerHTML = '';
-        
+        var newConnections = {};
+
         for (var r = HIDDEN_ROWS; r < ROWS + HIDDEN_ROWS; r++) {
           for (var c = 0; c < COLS; c++) {
             var cell = document.createElement('div');
             cell.className = 'cell';
             
             if (board[r] && board[r][c]) {
+              var color = board[r][c];
               var puyo = document.createElement('div');
-              puyo.className = 'puyo ' + board[r][c];
+              var classes = 'puyo ' + color;
+              var hasConnection = false;
+
+              // 隣接する同じ色のぷよをチェック
+              if (r > 0 && board[r-1] && board[r-1][c] === color) { classes += ' connect-top'; hasConnection = true; }
+              if (r < ROWS + HIDDEN_ROWS - 1 && board[r+1] && board[r+1][c] === color) { classes += ' connect-bottom'; hasConnection = true; }
+              if (c > 0 && board[r][c-1] === color) { classes += ' connect-left'; hasConnection = true; }
+              if (c < COLS - 1 && board[r][c+1] === color) { classes += ' connect-right'; hasConnection = true; }
+
+              // 落下中のぷよにアニメーションクラスを追加
+              if (fallingPuyos[r + ',' + c]) classes += ' falling';
+
+              // 新しく接続されたぷよにアニメーションクラスを追加
+              var key = r + ',' + c;
+              if (hasConnection && !prevConnections[key]) {
+                classes += ' connecting';
+              }
+              newConnections[key] = hasConnection;
+
+              puyo.className = classes;
               cell.appendChild(puyo);
             }
             
@@ -1062,6 +1122,9 @@
             }
           }
         }
+
+        // 接続状態を更新
+        prevConnections = newConnections;
       }
 
       function getPuyoPositions() {
@@ -1167,6 +1230,10 @@
           if (canMove) {
             currentPuyo.col += direction;
             safeRenderBoard();
+            // 移動成功時は落下タイマーをリセット
+            if (!isPaused && gameStarted) {
+              startDropInterval();
+            }
           }
         } catch (e) {
           console.error('Move error:', e);
@@ -1394,23 +1461,27 @@
         function gravityStep() {
           try {
             var fell = false;
+            fallingPuyos = {};
             for (var c = 0; c < COLS; c++) {
               for (var r = ROWS + HIDDEN_ROWS - 2; r >= 0; r--) {
                 if (board[r] && board[r][c] && board[r + 1] && !board[r + 1][c]) {
                   board[r + 1][c] = board[r][c];
                   board[r][c] = null;
+                  fallingPuyos[(r + 1) + ',' + c] = true;
                   fell = true;
                 }
               }
             }
             if (fell) {
               safeRenderBoard();
-              setTimeout(gravityStep, 40);
+              setTimeout(gravityStep, 50);
             } else {
+              fallingPuyos = {};
               callback();
             }
           } catch (e) {
             console.error('Gravity error:', e);
+            fallingPuyos = {};
             callback();
           }
         }

@@ -9,6 +9,8 @@
   <meta name="theme-color" content="#1a1a2e">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>ぷよぷよ</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0"></script>
+  <script src="./puyo-ai.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;800;900&display=swap" rel="stylesheet">
   <style>
     * {
@@ -115,7 +117,7 @@
       width: 50px;
     }
 
-    .next-container, .combo-panel {
+    .next-container {
       background: rgba(0,0,0,0.4);
       border-radius: 10px;
       padding: 6px;
@@ -143,23 +145,6 @@
       flex-direction: column;
       align-items: center;
       gap: 1px;
-    }
-
-    .combo-chain {
-      font-size: 0.85rem;
-      font-weight: 900;
-      color: #ff9800;
-      text-shadow: 0 1px 4px rgba(255,150,0,0.5);
-      min-height: 20px;
-      line-height: 20px;
-    }
-
-    .combo-bonus {
-      font-size: 0.6rem;
-      font-weight: 700;
-      color: #69f0ae;
-      min-height: 14px;
-      line-height: 14px;
     }
 
     .game-board {
@@ -372,11 +357,11 @@
 
     @keyframes chainExplode {
       0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3) rotate(-10deg); filter: blur(10px); }
-      10% { opacity: 1; transform: translate(-50%, -50%) scale(1.4) rotate(3deg); filter: blur(0); }
+      10% { opacity: 0.6; transform: translate(-50%, -50%) scale(1.4) rotate(3deg); filter: blur(0); }
       20% { transform: translate(-50%, -50%) scale(1) rotate(-2deg); }
       30% { transform: translate(-50%, -50%) scale(1.15) rotate(1deg); }
       40% { transform: translate(-50%, -50%) scale(1) rotate(0deg); }
-      75% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+      75% { opacity: 0.6; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
       100% { opacity: 0; transform: translate(-50%, -70%) scale(0.8); }
     }
 
@@ -423,9 +408,9 @@
     }
 
     @keyframes starBurst {
-      0% { opacity: 1; transform: translate(-50%, -50%) scale(0); }
-      30% { opacity: 1; transform: translate(var(--tx), var(--ty)) scale(1.3) rotate(180deg); }
-      70% { opacity: 0.8; transform: translate(calc(var(--tx) * 1.3), calc(var(--ty) * 1.3)) scale(1) rotate(300deg); }
+      0% { opacity: 0.5; transform: translate(-50%, -50%) scale(0); }
+      30% { opacity: 0.5; transform: translate(var(--tx), var(--ty)) scale(1.3) rotate(180deg); }
+      70% { opacity: 0.4; transform: translate(calc(var(--tx) * 1.3), calc(var(--ty) * 1.3)) scale(1) rotate(300deg); }
       100% { opacity: 0; transform: translate(calc(var(--tx) * 1.5), calc(var(--ty) * 1.5)) scale(0.3) rotate(360deg); }
     }
 
@@ -446,7 +431,7 @@
     }
 
     @keyframes flashEffect {
-      0% { opacity: 0.4; }
+      0% { opacity: 0.08; }
       100% { opacity: 0; }
     }
 
@@ -724,11 +709,6 @@
           <div class="panel-label">NEXT</div>
           <div class="next-preview" id="nextPreview"></div>
         </div>
-        <div class="combo-panel">
-          <div class="panel-label">COMBO</div>
-          <div class="combo-chain" id="comboChain">-</div>
-          <div class="combo-bonus" id="comboBonus"></div>
-        </div>
       </div>
       <div class="game-board" id="gameBoard">
         <div class="board-inner" id="board"></div>
@@ -781,7 +761,7 @@
 
       var COLS = 6;
       var ROWS = 12;
-      var COLORS = ['red', 'green', 'yellow', 'blue', 'purple'];
+      var COLORS = ['red', 'green', 'blue', 'purple'];  // 4色
       var HIDDEN_ROWS = 1;
 
       var CHAIN_BONUS = [0, 0, 8, 16, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 480, 512];
@@ -803,8 +783,8 @@
       // AIガイド用
       var aiGuideEnabled = false;
       var recommendedPlacement = null;
-      var AI_BEAM_WIDTH = 80;
-      var AI_DEPTH = 8;
+      var aiMoveTimeout = null;
+      var AI_MOVE_DELAY = 300;  // AI自動操作の遅延(ms)
 
       // 連鎖表示用
       var chainDisplayTimeout = null;
@@ -824,404 +804,65 @@
         return !inputLocked && !isProcessing && !gameOver && !isPaused && gameStarted && currentPuyo !== null;
       }
 
-      // ========== AIエンジン ==========
+      // ========== ビームサーチAIエンジン ==========
 
-      function cloneBoard(b) {
-        var newBoard = [];
-        for (var r = 0; r < b.length; r++) {
-          newBoard.push(b[r].slice());
+      var COLOR_TO_INDEX = { 'red': 0, 'green': 1, 'blue': 2, 'purple': 3 };
+      var TOTAL_ROWS = ROWS + HIDDEN_ROWS;  // 13
+
+      // AI自動操作を実行
+      function executeAIMove() {
+        if (!aiGuideEnabled || !currentPuyo || !recommendedPlacement || isProcessing || gameOver || isPaused) {
+          return;
         }
-        return newBoard;
-      }
 
-      function getColumnHeight(b, col) {
-        for (var r = 0; r < ROWS + HIDDEN_ROWS; r++) {
-          if (b[r] && b[r][col]) return ROWS + HIDDEN_ROWS - r;
-        }
-        return 0;
-      }
+        try {
+          // 範囲チェック
+          var col = recommendedPlacement.col;
+          var rotation = recommendedPlacement.rotation;
+          if (col < 0 || col >= COLS || rotation < 0 || rotation >= 4) {
+            console.warn('Invalid AI placement:', col, rotation);
+            return;
+          }
 
-      function aiApplyGravity(b) {
-        var changed = true;
-        while (changed) {
-          changed = false;
-          for (var c = 0; c < COLS; c++) {
-            for (var r = ROWS + HIDDEN_ROWS - 2; r >= 0; r--) {
-              if (b[r] && b[r][c] && b[r + 1] && !b[r + 1][c]) {
-                b[r + 1][c] = b[r][c];
-                b[r][c] = null;
-                changed = true;
-              }
+          // subColの範囲チェック
+          var offsets = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+          var subCol = col + offsets[rotation][0];
+          if (subCol < 0 || subCol >= COLS) {
+            console.warn('Invalid AI subCol:', subCol);
+            return;
+          }
+
+          // 推奨位置に直接設定
+          currentPuyo.col = col;
+          currentPuyo.rotation = rotation;
+          safeRenderBoard();
+
+          // 少し待ってからハードドロップ
+          setTimeout(function() {
+            if (currentPuyo && !isProcessing && !gameOver && !isPaused) {
+              hardDrop();
             }
-          }
+          }, 100);
+        } catch (e) {
+          console.error('AI move error:', e);
         }
       }
 
-      function aiSimulateChains(b) {
-        var totalPopped = 0;
-        var chainCount = 0;
-
-        while (true) {
-          aiApplyGravity(b);
-
-          var visited = [];
-          for (var r = 0; r < ROWS + HIDDEN_ROWS; r++) {
-            visited.push(new Array(COLS).fill(false));
-          }
-
-          var toRemove = [];
-          var colorSet = {};
-
-          function floodFill(r, c, color, group) {
-            if (r < 0 || r >= ROWS + HIDDEN_ROWS || c < 0 || c >= COLS) return;
-            if (!b[r] || visited[r][c] || b[r][c] !== color) return;
-            visited[r][c] = true;
-            group.push({ r: r, c: c });
-            floodFill(r - 1, c, color, group);
-            floodFill(r + 1, c, color, group);
-            floodFill(r, c - 1, color, group);
-            floodFill(r, c + 1, color, group);
-          }
-
-          for (var r = 0; r < ROWS + HIDDEN_ROWS; r++) {
-            for (var c = 0; c < COLS; c++) {
-              if (!visited[r][c] && b[r] && b[r][c]) {
-                var group = [];
-                floodFill(r, c, b[r][c], group);
-                if (group.length >= 4) {
-                  colorSet[b[r][c]] = true;
-                  for (var i = 0; i < group.length; i++) {
-                    toRemove.push(group[i]);
-                  }
-                }
-              }
-            }
-          }
-
-          if (toRemove.length === 0) break;
-
-          chainCount++;
-          totalPopped += toRemove.length;
-
-          for (var i = 0; i < toRemove.length; i++) {
-            var item = toRemove[i];
-            b[item.r][item.c] = null;
-          }
+      // AI自動操作をスケジュール
+      function scheduleAIMove() {
+        if (aiMoveTimeout) {
+          clearTimeout(aiMoveTimeout);
+          aiMoveTimeout = null;
         }
 
-        return { chainCount: chainCount, popped: totalPopped };
+        if (aiGuideEnabled && recommendedPlacement && currentPuyo && !isProcessing && !gameOver && !isPaused) {
+          aiMoveTimeout = setTimeout(function() {
+            executeAIMove();
+          }, AI_MOVE_DELAY);
+        }
       }
 
-      function getPlacementPositions(col, rotation) {
-        var offsets = [[0, -1], [1, 0], [0, 1], [-1, 0]];
-        var offset = offsets[rotation];
-        return [
-          { r: 0, c: col },
-          { r: offset[1], c: col + offset[0] }
-        ];
-      }
-
-      function simulatePlacement(b, puyo, col, rotation) {
-        var positions = getPlacementPositions(col, rotation);
-        var mainPos = positions[0];
-        var subPos = positions[1];
-
-        // 範囲チェック
-        if (mainPos.c < 0 || mainPos.c >= COLS || subPos.c < 0 || subPos.c >= COLS) {
-          return null;
-        }
-
-        // 落下位置を計算
-        var mainDropR = -1;
-        for (var r = ROWS + HIDDEN_ROWS - 1; r >= 0; r--) {
-          if (!b[r][mainPos.c]) { mainDropR = r; break; }
-        }
-        if (mainDropR < 0) return null;
-
-        var subDropR = -1;
-        for (var r = ROWS + HIDDEN_ROWS - 1; r >= 0; r--) {
-          if (!b[r][subPos.c]) { subDropR = r; break; }
-        }
-        if (subDropR < 0) return null;
-
-        // 回転によって落下順序を調整
-        var newBoard = cloneBoard(b);
-
-        if (rotation === 2) { // サブが下
-          newBoard[subDropR][subPos.c] = puyo.sub;
-          // メインはその上
-          for (var r = subDropR - 1; r >= 0; r--) {
-            if (!newBoard[r][mainPos.c]) { newBoard[r][mainPos.c] = puyo.main; break; }
-          }
-        } else if (rotation === 0) { // サブが上
-          newBoard[mainDropR][mainPos.c] = puyo.main;
-          for (var r = mainDropR - 1; r >= 0; r--) {
-            if (!newBoard[r][subPos.c]) { newBoard[r][subPos.c] = puyo.sub; break; }
-          }
-        } else { // 横並び
-          newBoard[mainDropR][mainPos.c] = puyo.main;
-          newBoard[subDropR][subPos.c] = puyo.sub;
-        }
-
-        return newBoard;
-      }
-
-      function generateAllPlacements(b, puyo) {
-        var placements = [];
-        for (var col = 0; col < COLS; col++) {
-          for (var rotation = 0; rotation < 4; rotation++) {
-            var positions = getPlacementPositions(col, rotation);
-            var valid = true;
-            for (var i = 0; i < positions.length; i++) {
-              if (positions[i].c < 0 || positions[i].c >= COLS) {
-                valid = false;
-                break;
-              }
-            }
-            if (!valid) continue;
-
-            var simBoard = simulatePlacement(b, puyo, col, rotation);
-            if (simBoard) {
-              placements.push({ col: col, rotation: rotation, board: simBoard });
-            }
-          }
-        }
-        return placements;
-      }
-
-      function evaluateBoard(b, chainResult) {
-        var score = 0;
-
-        // 連鎖評価：長連鎖を非常に高く評価
-        if (chainResult.chainCount >= 2) {
-          score += Math.pow(chainResult.chainCount, 3.5) * 1000;
-        } else if (chainResult.chainCount === 1) {
-          score -= 500;
-        }
-
-        // 高さ計算
-        var heights = [];
-        for (var c = 0; c < COLS; c++) {
-          heights.push(getColumnHeight(b, c));
-        }
-
-        // 列ごとの高さペナルティ（中央ほど厳しく）
-        var columnPenaltyWeight = [1, 2, 6, 6, 2, 1];
-        for (var c = 0; c < COLS; c++) {
-          var h = heights[c];
-          if (h >= ROWS) {
-            return (c === 2 || c === 3) ? -500000 : -200000;
-          } else if (h >= 10) {
-            score -= 12000 * columnPenaltyWeight[c];
-          } else if (h >= 8) {
-            score -= 4000 * columnPenaltyWeight[c];
-          } else if (h >= 6) {
-            score -= 800 * columnPenaltyWeight[c];
-          }
-        }
-
-        // 高速グループ分析（スタックベース）
-        var visited = [];
-        for (var r = 0; r < ROWS + HIDDEN_ROWS; r++) {
-          visited.push(new Array(COLS).fill(false));
-        }
-
-        var threeGroups = [];
-        var twoGroups = [];
-        var colorLayers = {}; // 各色の高さ別グループ
-
-        for (var r = 0; r < ROWS + HIDDEN_ROWS; r++) {
-          for (var c = 0; c < COLS; c++) {
-            if (!visited[r][c] && b[r] && b[r][c]) {
-              var color = b[r][c];
-              var stack = [[r, c]];
-              var group = [];
-              var minRow = ROWS + HIDDEN_ROWS;
-              var maxRow = 0;
-
-              while (stack.length > 0) {
-                var pos = stack.pop();
-                var pr = pos[0], pc = pos[1];
-                if (pr < 0 || pr >= ROWS + HIDDEN_ROWS || pc < 0 || pc >= COLS) continue;
-                if (visited[pr][pc] || !b[pr] || b[pr][pc] !== color) continue;
-                visited[pr][pc] = true;
-                group.push([pr, pc]);
-                if (pr < minRow) minRow = pr;
-                if (pr > maxRow) maxRow = pr;
-                stack.push([pr - 1, pc], [pr + 1, pc], [pr, pc - 1], [pr, pc + 1]);
-              }
-
-              var size = group.length;
-              if (size === 3) {
-                threeGroups.push({ cells: group, minRow: minRow, maxRow: maxRow, color: color });
-              } else if (size === 2) {
-                twoGroups.push({ cells: group, minRow: minRow, maxRow: maxRow, color: color });
-              }
-
-              // 色別レイヤー記録（連鎖構造分析用）
-              if (size >= 2) {
-                if (!colorLayers[color]) colorLayers[color] = [];
-                colorLayers[color].push({ minRow: minRow, maxRow: maxRow, size: size });
-              }
-            }
-          }
-        }
-
-        // 3個グループ評価（連鎖の種）- より高い報酬
-        score += threeGroups.length * 800;
-        for (var i = 0; i < threeGroups.length; i++) {
-          // 下にあるほど安定（連鎖の土台になる）
-          score += threeGroups[i].maxRow * 30;
-        }
-
-        // 2個グループ（連鎖に育つ可能性）
-        score += twoGroups.length * 150;
-
-        // 色別レイヤー分析：同色グループが縦に積み重なっている = 連鎖構造
-        var layerBonus = 0;
-        for (var color in colorLayers) {
-          var layers = colorLayers[color];
-          if (layers.length >= 2) {
-            // 高さでソート
-            layers.sort(function(a, b) { return b.maxRow - a.maxRow; });
-            // 縦に積み重なっているか確認
-            for (var i = 0; i < layers.length - 1; i++) {
-              var lower = layers[i];
-              var upper = layers[i + 1];
-              // 下のグループの上に別のグループがある = 連鎖の可能性
-              if (upper.maxRow < lower.minRow && lower.minRow - upper.maxRow <= 4) {
-                layerBonus += 400;
-                // 3個グループが重なっている場合は特に高評価
-                if (lower.size === 3 || upper.size === 3) {
-                  layerBonus += 300;
-                }
-              }
-            }
-          }
-        }
-        score += layerBonus;
-
-        // 連鎖ポテンシャル（3個グループを消した時の連鎖数）
-        var maxPotentialChain = 0;
-        var potentialSum = 0;
-        var simCount = Math.min(threeGroups.length, 3);
-        for (var i = 0; i < simCount; i++) {
-          var g = threeGroups[i];
-          var testBoard = cloneBoard(b);
-          // 3個グループに1個追加して消す想定
-          for (var j = 0; j < g.cells.length; j++) {
-            testBoard[g.cells[j][0]][g.cells[j][1]] = null;
-          }
-          var potentialResult = aiSimulateChains(testBoard);
-          if (potentialResult.chainCount > maxPotentialChain) {
-            maxPotentialChain = potentialResult.chainCount;
-          }
-          potentialSum += potentialResult.chainCount;
-        }
-        // 連鎖ポテンシャルを非常に高く評価
-        if (maxPotentialChain >= 1) {
-          score += Math.pow(maxPotentialChain + 1, 3.5) * 500;
-        }
-        // 複数の連鎖ポテンシャルがある場合もボーナス
-        if (potentialSum >= 3) {
-          score += potentialSum * 200;
-        }
-
-        // GTR風パターン：左端か右端に2-3列の階段
-        var leftStair = 0, rightStair = 0;
-        for (var c = 0; c < 3; c++) {
-          if (c < COLS - 1 && heights[c] < heights[c + 1]) leftStair++;
-        }
-        for (var c = COLS - 1; c > COLS - 4; c--) {
-          if (c > 0 && heights[c] < heights[c - 1]) rightStair++;
-        }
-        if (leftStair >= 2 || rightStair >= 2) {
-          score += 600;
-        }
-
-        // 色の縦並びボーナス（より強く評価）
-        for (var c = 0; c < COLS; c++) {
-          var lastColor = null;
-          var streak = 0;
-          for (var r = ROWS + HIDDEN_ROWS - 1; r >= 0; r--) {
-            if (b[r] && b[r][c]) {
-              if (b[r][c] === lastColor) {
-                streak++;
-                if (streak === 2) score += 50;
-                else if (streak === 3) score += 120;
-              } else {
-                lastColor = b[r][c];
-                streak = 1;
-              }
-            } else break;
-          }
-        }
-
-        // 占有率計算
-        var filledCells = 0;
-        for (var r = HIDDEN_ROWS; r < ROWS + HIDDEN_ROWS; r++) {
-          for (var c = 0; c < COLS; c++) {
-            if (b[r] && b[r][c]) filledCells++;
-          }
-        }
-        var occupancyRate = filledCells / 72;
-
-        // 占有率が高い時に消すことを促進
-        if (occupancyRate >= 0.45 && chainResult.chainCount >= 1) {
-          score += chainResult.chainCount * 2000;
-        }
-
-        // 占有率ペナルティ
-        if (occupancyRate >= 0.60) {
-          score -= 60000;
-        } else if (occupancyRate >= 0.50) {
-          score -= 20000;
-        } else if (occupancyRate >= 0.40) {
-          score -= 5000;
-        }
-
-        return score;
-      }
-
-      function beamSearch(b, currentP, nextP, beamWidth, depth) {
-        if (!currentP) return null;
-
-        var beam = [{ board: cloneBoard(b), score: 0, firstMove: null }];
-
-        for (var d = 0; d < depth; d++) {
-          var puyo = (d === 0) ? currentP : (nextP[d - 1] || generatePuyo());
-          var candidates = [];
-
-          for (var s = 0; s < beam.length; s++) {
-            var state = beam[s];
-            var placements = generateAllPlacements(state.board, puyo);
-
-            for (var p = 0; p < placements.length; p++) {
-              var placement = placements[p];
-              var simBoard = cloneBoard(placement.board);
-              var chainResult = aiSimulateChains(simBoard);
-              var evalScore = evaluateBoard(simBoard, chainResult);
-
-              candidates.push({
-                board: simBoard,
-                score: state.score + evalScore,
-                firstMove: state.firstMove || { col: placement.col, rotation: placement.rotation }
-              });
-            }
-          }
-
-          if (candidates.length === 0) break;
-
-          candidates.sort(function(a, b) { return b.score - a.score; });
-          beam = candidates.slice(0, beamWidth);
-        }
-
-        if (beam.length > 0 && beam[0].firstMove) {
-          return beam[0].firstMove;
-        }
-        return null;
-      }
-
+      // AI推奨を計算（ビームサーチ使用）
       function calculateRecommendation() {
         if (!aiGuideEnabled || !currentPuyo || isProcessing || gameOver) {
           recommendedPlacement = null;
@@ -1230,9 +871,20 @@
 
         setTimeout(function() {
           try {
-            var result = beamSearch(board, currentPuyo, nextPuyos, AI_BEAM_WIDTH, AI_DEPTH);
-            recommendedPlacement = result;
+            if (typeof PuyoAI === 'undefined') {
+              console.warn('PuyoAI not loaded');
+              recommendedPlacement = null;
+              return;
+            }
+
+            var nextPuyo = nextPuyos.length > 0 ? nextPuyos[0] : null;
+            var result = PuyoAI.findBestMove(board, currentPuyo, nextPuyo, COLOR_TO_INDEX);
+
+            recommendedPlacement = { col: result.col, rotation: result.rotation };
             safeRenderBoard();
+
+            // AI自動操作をスケジュール
+            scheduleAIMove();
           } catch (e) {
             console.error('AI calculation error:', e);
             recommendedPlacement = null;
@@ -1241,48 +893,53 @@
       }
 
       function getGhostPositions() {
-        if (!recommendedPlacement || !currentPuyo) return [];
+        if (!currentPuyo) return [];
 
-        var col = recommendedPlacement.col;
-        var rotation = recommendedPlacement.rotation;
+        // 現在のぷよの位置と回転から落下予測位置を計算
+        var col = currentPuyo.col;
+        var rotation = currentPuyo.rotation;
+
         var offsets = [[0, -1], [1, 0], [0, 1], [-1, 0]];
         var offset = offsets[rotation];
 
         var mainC = col;
         var subC = col + offset[0];
 
-        // 落下位置を計算
-        var mainDropR = -1;
-        for (var r = ROWS + HIDDEN_ROWS - 1; r >= 0; r--) {
-          if (!board[r][mainC]) { mainDropR = r; break; }
-        }
+        // 範囲チェック
+        if (mainC < 0 || mainC >= COLS || subC < 0 || subC >= COLS) return [];
 
-        var subDropR = -1;
-        for (var r = ROWS + HIDDEN_ROWS - 1; r >= 0; r--) {
-          if (!board[r][subC]) { subDropR = r; break; }
-        }
+        // 各列の落下位置を計算
+        var findDropRow = function(c) {
+          if (c < 0 || c >= COLS) return -1;
+          for (var r = ROWS + HIDDEN_ROWS - 1; r >= HIDDEN_ROWS; r--) {
+            if (!board[r] || !board[r][c]) return r;
+          }
+          return -1;
+        };
 
-        if (mainDropR < 0 || subDropR < 0) return [];
+        var mainDropR = findDropRow(mainC);
+        var subDropR = findDropRow(subC);
+
+        if (mainDropR < HIDDEN_ROWS || subDropR < HIDDEN_ROWS) return [];
 
         var positions = [];
 
-        if (rotation === 2) { // サブが下
+        if (rotation === 2) {
+          // サブが下
           positions.push({ r: subDropR, c: subC, color: currentPuyo.sub });
-          var mainR = subDropR - 1;
-          if (mainC === subC && mainR >= 0) {
+          var mainR = (mainC === subC) ? subDropR - 1 : mainDropR;
+          if (mainR >= HIDDEN_ROWS) {
             positions.push({ r: mainR, c: mainC, color: currentPuyo.main });
-          } else {
-            positions.push({ r: mainDropR, c: mainC, color: currentPuyo.main });
           }
-        } else if (rotation === 0) { // サブが上
+        } else if (rotation === 0) {
+          // メインが下
           positions.push({ r: mainDropR, c: mainC, color: currentPuyo.main });
-          var subR = mainDropR - 1;
-          if (mainC === subC && subR >= 0) {
+          var subR = (mainC === subC) ? mainDropR - 1 : subDropR;
+          if (subR >= HIDDEN_ROWS) {
             positions.push({ r: subR, c: subC, color: currentPuyo.sub });
-          } else {
-            positions.push({ r: subDropR, c: subC, color: currentPuyo.sub });
           }
-        } else { // 横並び
+        } else {
+          // 横向き
           positions.push({ r: mainDropR, c: mainC, color: currentPuyo.main });
           positions.push({ r: subDropR, c: subC, color: currentPuyo.sub });
         }
@@ -1290,7 +947,39 @@
         return positions;
       }
 
-      // ========== /AIエンジン ==========
+      // AI初期化（CNNモデルをロード）
+      function initAI() {
+        var aiToggle = document.getElementById('aiToggle');
+        if (aiToggle) {
+          if (typeof PuyoAI !== 'undefined') {
+            aiToggle.textContent = 'AI';
+            aiToggle.style.opacity = '1';
+            console.log('PuyoAI loaded: BeamSearch (depth=' + PuyoAI.config.SEARCH_DEPTH + ', width=' + PuyoAI.config.BEAM_WIDTH + ')');
+
+            // CNNモデルをロード（非同期）
+            if (typeof PuyoAI.loadModel === 'function') {
+              aiToggle.title = 'CNNモデル読込中...';
+              PuyoAI.loadModel('./model_potential/model.json').then(function(success) {
+                if (success) {
+                  aiToggle.title = 'CNN潜在連鎖AI (深度' + PuyoAI.config.SEARCH_DEPTH + ')';
+                  console.log('CNN model loaded successfully');
+                } else {
+                  aiToggle.title = 'ビームサーチAI (CNNなし)';
+                  console.log('CNN model not available, using fallback');
+                }
+              });
+            } else {
+              aiToggle.title = 'ビームサーチAI (深度' + PuyoAI.config.SEARCH_DEPTH + ')';
+            }
+          } else {
+            aiToggle.textContent = 'AI*';
+            aiToggle.title = 'AI未読込';
+            console.warn('PuyoAI not available');
+          }
+        }
+      }
+
+      // ========== /ビームサーチAIエンジン ==========
 
       function initBoard() {
         board = [];
@@ -1343,8 +1032,8 @@
             }
           }
 
-          // AIゴースト表示
-          if (aiGuideEnabled && recommendedPlacement) {
+          // ゴースト表示（落下予測位置）
+          if (currentPuyo) {
             var ghostPositions = getGhostPositions();
             for (var g = 0; g < ghostPositions.length; g++) {
               var gpos = ghostPositions[g];
@@ -2049,6 +1738,11 @@
             if (aiGuideEnabled) {
               calculateRecommendation();
             } else {
+              // AI自動操作をキャンセル
+              if (aiMoveTimeout) {
+                clearTimeout(aiMoveTimeout);
+                aiMoveTimeout = null;
+              }
               recommendedPlacement = null;
               safeRenderBoard();
             }
@@ -2155,6 +1849,8 @@
         initBoard();
         setupControls();
         safeRenderBoard();
+        // ビームサーチAIを初期化
+        initAI();
         // ゲームは開始されない - STARTボタン待ち
       }
 

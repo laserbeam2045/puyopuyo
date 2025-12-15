@@ -1,0 +1,11 @@
+node_modules/
+potential_data.json
+potential_data/
+model/
+model_supervised/
+training_state.json
+*.md
+analyze.js
+train*.js
+generate_potential_data*.js
+package*.json

@@ -1096,27 +1096,31 @@
             }
           }
 
-          // ゴースト表示（落下予測位置）
+          // ゴースト表示（落下予測位置）- 現在のぷよと距離が2以上の場合のみ
           if (currentPuyo) {
             var ghostPositions = getGhostPositions();
+            // 現在のぷよとゴーストの最小距離を計算
+            var minDistance = Infinity;
             for (var g = 0; g < ghostPositions.length; g++) {
               var gpos = ghostPositions[g];
-              if (gpos && gpos.r >= HIDDEN_ROWS && gpos.r < ROWS + HIDDEN_ROWS) {
-                var gCellIdx = (gpos.r - HIDDEN_ROWS) * COLS + gpos.c;
-                var gCell = boardEl.children[gCellIdx];
-                if (gCell) {
-                  // 既存のゴーストを削除
-                  var existingGhost = gCell.querySelector('.puyo.ghost');
-                  if (existingGhost) existingGhost.remove();
-                  // 現在のぷよと重ならない場合のみ表示
-                  var hasCurrentPuyo = false;
-                  for (var p = 0; p < positions.length; p++) {
-                    if (positions[p].r === gpos.r && positions[p].c === gpos.c) {
-                      hasCurrentPuyo = true;
-                      break;
-                    }
+              if (!gpos) continue;
+              for (var p = 0; p < positions.length; p++) {
+                if (positions[p].c === gpos.c) {
+                  var dist = gpos.r - positions[p].r;
+                  if (dist > 0 && dist < minDistance) {
+                    minDistance = dist;
                   }
-                  if (!hasCurrentPuyo && !board[gpos.r][gpos.c]) {
+                }
+              }
+            }
+            // 距離が2以上の場合のみゴーストを表示
+            if (minDistance >= 2) {
+              for (var g = 0; g < ghostPositions.length; g++) {
+                var gpos = ghostPositions[g];
+                if (gpos && gpos.r >= HIDDEN_ROWS && gpos.r < ROWS + HIDDEN_ROWS) {
+                  var gCellIdx = (gpos.r - HIDDEN_ROWS) * COLS + gpos.c;
+                  var gCell = boardEl.children[gCellIdx];
+                  if (gCell && !board[gpos.r][gpos.c]) {
                     var ghostPuyo = document.createElement('div');
                     ghostPuyo.className = 'puyo ghost ' + gpos.color;
                     gCell.appendChild(ghostPuyo);

@@ -160,27 +160,31 @@
       grid-template-columns: repeat(6, 36px);
       grid-template-rows: repeat(12, 36px);
       gap: 0;
-      background: rgba(0,0,0,0.4);
       padding: 4px;
       border-radius: 8px;
+      background:
+        linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px),
+        rgba(0,0,0,0.4);
+      background-size: 36px 36px, 36px 36px, 100% 100%;
+      background-position: 4px 4px, 4px 4px, 0 0;
     }
 
     .cell {
       width: 36px;
       height: 36px;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(255,255,255,0.08);
       display: flex;
       align-items: center;
       justify-content: center;
       position: relative;
+      overflow: visible;
     }
 
     .puyo {
       width: 34px;
       height: 34px;
       border-radius: 50%;
-      position: absolute;
+      position: relative;
     }
 
     .puyo::before {
@@ -251,10 +255,15 @@
     }
 
     /* 隣接ぷよとの接続表示 - 接続方向の角を四角にしてつなげる */
-    .puyo.connect-top { top: -1px; height: 36px; border-top-left-radius: 0; border-top-right-radius: 0; }
-    .puyo.connect-bottom { bottom: -1px; top: auto; height: 36px; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-    .puyo.connect-left { left: -1px; width: 36px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
-    .puyo.connect-right { right: -1px; left: auto; width: 36px; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+    .puyo.connect-top { margin-top: -1px; height: 35px; border-top-left-radius: 0; border-top-right-radius: 0; }
+    .puyo.connect-bottom { margin-bottom: -1px; height: 35px; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+    .puyo.connect-left { margin-left: -1px; width: 35px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+    .puyo.connect-right { margin-right: -1px; width: 35px; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+
+    /* 上下両方向に接続 */
+    .puyo.connect-top.connect-bottom { margin-top: -1px; margin-bottom: -1px; height: 36px; }
+    /* 左右両方向に接続 */
+    .puyo.connect-left.connect-right { margin-left: -1px; margin-right: -1px; width: 36px; }
 
     /* 接続時はフラットな色に変更して境目を消す */
     .puyo[class*="connect-"] { box-shadow: none; }

@@ -19,10 +19,7 @@
   const NUM_CHANNELS = 5;  // 4色 + 空
   const NUM_ACTIONS = COLS * 4;
   const MAX_CHAIN = 18;   // 最大連鎖数
-  // クラス構造: stable_0~stable_18 (19クラス) + collapse_1~collapse_18 (18クラス) = 37クラス
-  const STABLE_CLASSES = MAX_CHAIN + 1;    // 0-18 = 19クラス
-  const COLLAPSE_CLASSES = MAX_CHAIN + 1;  // 1-18 = 18クラス (0は存在しない)
-  const NUM_CLASSES = STABLE_CLASSES + COLLAPSE_CLASSES - 1;  // 37クラス
+  const NUM_CLASSES = MAX_CHAIN + 1;  // 0-18連鎖 = 19クラス（stableとcollapse統合版）
 
   // ===== ビームサーチ設定 =====
   const BEAM_WIDTH = 40;
@@ -333,10 +330,21 @@
     }
   }
 
+  // ===== 盤面がstable（4連結以上がない）かどうか判定 =====
+  function isStableBoard(state) {
+    const groups = state.getConnectedGroups();
+    for (const group of groups) {
+      if (group.size >= 4) {
+        return false;  // 4連結以上があればcollapse（不安定）
+      }
+    }
+    return true;  // 4連結以上がなければstable（安定）
+  }
+
   // ===== 盤面評価関数（CNN使用時とフォールバック）=====
   function evaluateBoard(state) {
-    // CNNが使用可能ならCNN評価を使用
-    if (useCNN && potentialModel) {
+    // CNNが使用可能かつ安定盤面ならCNN評価を使用
+    if (useCNN && potentialModel && isStableBoard(state)) {
       return evaluateBoardWithCNN(state);
     }
     // フォールバック: 基本評価 + 手動の潜在連鎖評価
@@ -468,8 +476,8 @@
     return tf.tensor4d([data]);
   }
 
-  // CNNで潜在連鎖数を予測（分類モデル版）
-  // 返り値: { potentialChain: 期待連鎖数, isCollapsing: 崩壊確率, collapseChain: 崩壊時連鎖数 }
+  // CNNで潜在連鎖数を予測（統合分類モデル版）
+  // 返り値: { potentialChain: 期待連鎖数, predictedClass: 最確クラス, confidence: 確信度 }
   function predictPotentialCNN(state) {
     if (!potentialModel || typeof tf === 'undefined') {
       return null;
@@ -485,41 +493,20 @@
       inputTensor.dispose();
       prediction.dispose();
 
-      // 安定盤面クラス (stable_0 ~ stable_8) の期待連鎖数
-      let stableExpected = 0;
-      let stableProb = 0;
-      for (let i = 0; i < STABLE_CLASSES; i++) {
-        stableExpected += i * probs[i];
-        stableProb += probs[i];
-      }
-
-      // 崩壊盤面クラス (collapse_1 ~ collapse_9) の期待連鎖数
-      let collapseExpected = 0;
-      let collapseProb = 0;
-      for (let i = STABLE_CLASSES; i < NUM_CLASSES; i++) {
-        const chainCount = i - STABLE_CLASSES + 1;  // 1-9
-        collapseExpected += chainCount * probs[i];
-        collapseProb += probs[i];
-      }
-
-      // 最も確率の高いクラスを取得
+      // 期待連鎖数を計算（各クラス = 連鎖数）
+      let expectedChain = 0;
       let maxProb = 0;
       let maxClass = 0;
       for (let i = 0; i < NUM_CLASSES; i++) {
+        expectedChain += i * probs[i];
         if (probs[i] > maxProb) {
           maxProb = probs[i];
           maxClass = i;
         }
       }
 
-      // 崩壊確率が高い場合は崩壊連鎖数、そうでなければ潜在連鎖数を返す
-      // AIは安定盤面を好むので、stableExpectedを基本とする
-      const isCollapsing = collapseProb > 0.5;
-
       return {
-        potentialChain: stableProb > 0 ? stableExpected / stableProb : 0,
-        isCollapsing: collapseProb,
-        collapseChain: collapseProb > 0 ? collapseExpected / collapseProb : 0,
+        potentialChain: expectedChain,
         predictedClass: maxClass,
         confidence: maxProb
       };
@@ -538,16 +525,8 @@
     if (useCNN && potentialModel) {
       const cnnResult = predictPotentialCNN(state);
       if (cnnResult !== null) {
-        // 潜在連鎖数をスコアに加算
+        // 潜在連鎖数をスコアに加算（2乗でスケーリング）
         score += Math.pow(cnnResult.potentialChain, 2) * EVAL_WEIGHTS.CNN_POTENTIAL / 100;
-
-        // 崩壊確率が高い場合はペナルティ（意図しない連鎖を避ける）
-        // ただし、崩壊時の連鎖数が大きい場合はボーナスにもなりうる
-        if (cnnResult.isCollapsing > 0.3) {
-          // 崩壊する可能性があるが、大連鎖なら許容
-          const collapseScore = cnnResult.collapseChain * cnnResult.isCollapsing;
-          score += (collapseScore - 2) * EVAL_WEIGHTS.CNN_POTENTIAL / 200;
-        }
       }
     }
 
@@ -810,16 +789,12 @@
         candidates.sort((a, b) => b.finalScore - a.finalScore);
         const topCandidates = candidates.slice(0, Math.min(10, beamWidth));
         for (const candidate of topCandidates) {
-          if (!candidate.state.gameOver) {
+          // stable盤面の場合のみCNN評価を適用
+          if (!candidate.state.gameOver && isStableBoard(candidate.state)) {
             const cnnResult = predictPotentialCNN(candidate.state);
             if (cnnResult !== null) {
               // 潜在連鎖数をスコアに加算
               candidate.finalScore += Math.pow(cnnResult.potentialChain, 2) * EVAL_WEIGHTS.CNN_POTENTIAL / 100;
-              // 崩壊確率が高い場合の調整
-              if (cnnResult.isCollapsing > 0.3) {
-                const collapseScore = cnnResult.collapseChain * cnnResult.isCollapsing;
-                candidate.finalScore += (collapseScore - 2) * EVAL_WEIGHTS.CNN_POTENTIAL / 200;
-              }
             }
           }
         }

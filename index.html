@@ -1846,15 +1846,15 @@
             var deltaY = e.changedTouches[0].clientY - touchStartY;
             var deltaTime = Date.now() - touchStartTime;
 
-            if (deltaTime < 300) {
-              if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 30) {
-                movePuyo(deltaX > 0 ? 1 : -1);
-              } else if (deltaY > 30) {
-                hardDrop();
-              } else if (deltaY < -30) {
-                rotatePuyo();
-              }
-            } else if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+            // スワイプ判定
+            if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 30) {
+              // 左右スワイプ: 移動
+              movePuyo(deltaX > 0 ? 1 : -1);
+            } else if (Math.abs(deltaY) > 30) {
+              // 上下スワイプ: ハードドロップ（上でも下でも落下）
+              hardDrop();
+            } else if (Math.abs(deltaX) < 15 && Math.abs(deltaY) < 15 && deltaTime < 300) {
+              // タップ: 回転
               rotatePuyo();
             }
           }, { passive: true });

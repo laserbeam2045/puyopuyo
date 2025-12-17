@@ -136,20 +136,24 @@
     CLIFF_PENALTY: -20,         // 3以上の段差
     BLOCKED_COLUMN_PENALTY: -25, // 完全にブロックされた列
 
-    // ライン消しボーナス（大幅強化）
-    LINES_CLEARED: 600,         // 消した行数ボーナス（1行あたり）
-    LINES_CLEARED_BONUS: [0, 200, 600, 1000, 1600],  // 同時消し行数ボーナス
+    // ライン消しボーナス（消しを最優先）
+    LINES_CLEARED: 800,         // 消した行数ボーナス（1行あたり）
+    LINES_CLEARED_BONUS: [0, 300, 700, 1200, 2000],  // 同時消し行数ボーナス
 
-    // 行の完成度ボーナス
-    ALMOST_COMPLETE_ROW: 50,    // 9/10埋まっている行
-    NEARLY_COMPLETE_ROW: 25,    // 8/10埋まっている行
+    // 行の完成度ボーナス（控えめに - 高すぎると消さない原因に）
+    ALMOST_COMPLETE_ROW: 15,    // 9/10埋まっている行
+    NEARLY_COMPLETE_ROW: 5,     // 8/10埋まっている行
 
-    // 戦略的ボーナス（控えめに）
-    WELL_DEPTH_BONUS: 8,        // I用の溝ボーナス（端のみ）- 控えめに
-    SINGLE_WELL_BONUS: 15,      // 溝が1箇所のみの場合のボーナス
+    // 戦略的ボーナス（テトリス狙いより消しを優先）
+    WELL_DEPTH_BONUS: 3,        // I用の溝ボーナス（端のみ）- 最小限
+    SINGLE_WELL_BONUS: 5,       // 溝が1箇所のみの場合のボーナス
     FLAT_BONUS: 40,             // 平らな盤面ボーナス
     LOW_PROFILE_BONUS: 80,      // 全体的に低い盤面ボーナス（強化）
     PERFECT_CLEAR_BONUS: 500,   // 全消しボーナス
+
+    // T-Spinボーナス
+    TSPIN_BONUS: [400, 800, 1200, 1600],      // T-Spin (0,1,2,3ライン)
+    TSPIN_MINI_BONUS: [100, 200, 400],        // T-Spin Mini (0,1,2ライン)
   };
 
   // ===== ゲーム状態クラス =====
@@ -365,12 +369,22 @@
   }
 
   // ===== 盤面評価関数（強化版）=====
-  function evaluateBoard(state, linesCleared = 0) {
+  function evaluateBoard(state, linesCleared = 0, tspinInfo = null) {
     if (state.gameOver || state.checkGameOver()) {
       return -1000000;
     }
 
     let score = 0;
+
+    // T-Spinボーナス
+    if (tspinInfo && tspinInfo.isTSpin) {
+      const lineIdx = Math.min(linesCleared, 3);
+      if (tspinInfo.isMini) {
+        score += EVAL_WEIGHTS.TSPIN_MINI_BONUS[Math.min(lineIdx, 2)] || 0;
+      } else {
+        score += EVAL_WEIGHTS.TSPIN_BONUS[lineIdx] || 0;
+      }
+    }
 
     // 各列の高さを取得
     const heights = [];
@@ -502,100 +516,132 @@
     return score;
   }
 
-  // ===== ビームサーチ（ホールド対応版）=====
+  // ===== ビームサーチ（シンプル版）=====
   function beamSearch(state, depth = SEARCH_DEPTH, beamWidth = BEAM_WIDTH) {
     if (!state.currentMino) return null;
 
     const currentType = state.currentMino.type;
     const holdType = state.holdMino;
     const canHold = state.canHold;
+    const nextMinos = state.nextMinos || [];
 
-    // 探索する最初のミノタイプの選択肢
-    const firstMinoOptions = [{ type: currentType, useHold: false }];
-    if (canHold && holdType && holdType !== currentType) {
-      firstMinoOptions.push({ type: holdType, useHold: true });
-    } else if (canHold && !holdType && state.nextMinos.length > 0) {
-      // ホールドが空の場合、次のミノを使う選択肢
-      firstMinoOptions.push({ type: state.nextMinos[0], useHold: true });
+    // 最初に使えるミノの選択肢を列挙
+    const firstOptions = [];
+
+    // 選択肢1: 現在のミノをそのまま使う
+    firstOptions.push({
+      type: currentType,
+      useHold: false,
+      nextQueue: nextMinos.slice(0, depth)
+    });
+
+    // 選択肢2: ホールドを使う
+    if (canHold) {
+      if (holdType) {
+        // ホールドにミノがある場合、それを使う
+        firstOptions.push({
+          type: holdType,
+          useHold: true,
+          nextQueue: nextMinos.slice(0, depth)
+        });
+      } else if (nextMinos.length > 0) {
+        // ホールドが空の場合、現在のミノをホールドして次のミノを使う
+        firstOptions.push({
+          type: nextMinos[0],
+          useHold: true,
+          nextQueue: nextMinos.slice(1, depth + 1)
+        });
+      }
     }
 
-    let beam = [];
+    let allResults = [];
 
-    // 最初のミノの選択肢ごとに初期状態を作成
-    for (const option of firstMinoOptions) {
-      beam.push({
+    // 各選択肢について探索
+    for (const firstOption of firstOptions) {
+      let beam = [{
         state: state.clone(),
         actions: [],
         totalLinesCleared: 0,
-        firstMino: option.type,
-        usedHold: option.useHold
-      });
-    }
+        minoQueue: [firstOption.type, ...firstOption.nextQueue],
+        useHold: firstOption.useHold
+      }];
 
-    // 探索深度分ループ
-    for (let d = 0; d < depth; d++) {
-      const candidates = [];
+      // 探索深度分ループ
+      for (let d = 0; d < Math.min(depth, beam[0].minoQueue.length); d++) {
+        const candidates = [];
 
-      for (const node of beam) {
-        if (node.state.gameOver) continue;
+        for (const node of beam) {
+          if (node.state.gameOver) continue;
+          if (d >= node.minoQueue.length) continue;
 
-        // このノードで使うミノタイプを決定
-        let minoType;
-        if (d === 0) {
-          minoType = node.firstMino;
-        } else {
-          // 2手目以降は次のミノを順番に使う
-          const minoIndex = d - (node.usedHold && !state.holdMino ? 0 : 0);
-          const adjustedIndex = node.usedHold ? d : d - 1;
-          if (adjustedIndex < 0) {
-            minoType = node.firstMino;
-          } else if (adjustedIndex < state.nextMinos.length) {
-            minoType = state.nextMinos[adjustedIndex];
-          } else {
-            continue;
+          const minoType = node.minoQueue[d];
+          const placements = getAllPlacements(node.state, minoType);
+
+          for (const placement of placements) {
+            // T-Spin検出（配置前の盤面で判定）
+            // AIは常に「回転で設置した」と見なす
+            const tspinInfo = detectTSpin(
+              node.state.board,
+              placement.type,
+              placement.rotation,
+              placement.row,
+              placement.col,
+              true  // AIは回転で設置したと見なす
+            );
+
+            const newState = node.state.clone();
+            newState.placeMino(placement.type, placement.rotation, placement.row, placement.col);
+            const linesCleared = newState.clearLines();
+
+            if (newState.checkGameOver()) {
+              newState.gameOver = true;
+            }
+
+            const action = {
+              ...placement,
+              useHold: d === 0 ? node.useHold : false,
+              tspinInfo: tspinInfo  // T-Spin情報を保存
+            };
+
+            candidates.push({
+              state: newState,
+              actions: [...node.actions, action],
+              totalLinesCleared: node.totalLinesCleared + linesCleared,
+              lastLinesCleared: linesCleared,
+              lastTspinInfo: tspinInfo,
+              minoQueue: node.minoQueue,
+              useHold: node.useHold
+            });
           }
         }
 
-        const placements = getAllPlacements(node.state, minoType);
+        if (candidates.length === 0) break;
 
-        for (const placement of placements) {
-          const newState = node.state.clone();
-          newState.placeMino(placement.type, placement.rotation, placement.row, placement.col);
-          const linesCleared = newState.clearLines();
-
-          if (newState.checkGameOver()) {
-            newState.gameOver = true;
+        // 評価してソート
+        for (const candidate of candidates) {
+          candidate.score = evaluateBoard(candidate.state, candidate.lastLinesCleared, candidate.lastTspinInfo);
+          // 累積ライン消しボーナス
+          candidate.score += candidate.totalLinesCleared * 100;
+          // T-Spinでライン消しした場合の追加ボーナス
+          if (candidate.lastTspinInfo && candidate.lastTspinInfo.isTSpin && candidate.lastLinesCleared > 0) {
+            candidate.score += candidate.lastLinesCleared * 200;
           }
-
-          const action = {
-            ...placement,
-            useHold: d === 0 ? node.usedHold : false
-          };
-
-          candidates.push({
-            state: newState,
-            actions: [...node.actions, action],
-            totalLinesCleared: node.totalLinesCleared + linesCleared,
-            lastLinesCleared: linesCleared,
-            firstMino: node.firstMino,
-            usedHold: node.usedHold
-          });
         }
+        candidates.sort((a, b) => b.score - a.score);
+
+        beam = candidates.slice(0, beamWidth);
       }
 
-      if (candidates.length === 0) break;
-
-      // 評価してソート
-      for (const candidate of candidates) {
-        candidate.score = evaluateBoard(candidate.state, candidate.lastLinesCleared);
+      // この選択肢の最良結果を追加
+      if (beam.length > 0 && beam[0].actions.length > 0) {
+        allResults.push(beam[0]);
       }
-      candidates.sort((a, b) => b.score - a.score);
-
-      beam = candidates.slice(0, beamWidth);
     }
 
-    if (beam.length > 0 && beam[0].actions.length > 0) {
-      return beam[0].actions[0];
+    // 全選択肢から最良を選ぶ
+    if (allResults.length > 0) {
+      allResults.sort((a, b) => b.score - a.score);
+      return allResults[0].actions[0];
     }
 
     return null;
@@ -613,6 +659,75 @@
     }
 
     return { type, rotation, row: ghostRow, col };
+  }
+
+  // ===== T-Spin検出 =====
+  // T-Spin判定: Tピースが回転で設置され、4つの角のうち3つ以上が埋まっている
+  // T-Spin Mini: 前面の角2つのみが埋まっている場合
+  function detectTSpin(board, type, rotation, row, col, wasLastMoveRotation) {
+    // Tピース以外はT-Spinではない
+    if (type !== 'T') {
+      return { isTSpin: false, isMini: false };
+    }
+
+    // 最後の操作が回転でなければT-Spinではない
+    if (!wasLastMoveRotation) {
+      return { isTSpin: false, isMini: false };
+    }
+
+    // Tピースの中心位置（3x3グリッドの中心 = row+1, col+1）
+    const centerRow = row + 1;
+    const centerCol = col + 1;
+
+    // 4つの角をチェック
+    const corners = [
+      { r: centerRow - 1, c: centerCol - 1 }, // 左上
+      { r: centerRow - 1, c: centerCol + 1 }, // 右上
+      { r: centerRow + 1, c: centerCol - 1 }, // 左下
+      { r: centerRow + 1, c: centerCol + 1 }, // 右下
+    ];
+
+    // 各角が埋まっているか（壁または他のブロック）
+    const filledCorners = corners.map(corner => {
+      if (corner.c < 0 || corner.c >= COLS || corner.r >= TOTAL_ROWS) {
+        return true; // 壁は埋まっていると見なす
+      }
+      if (corner.r < 0) {
+        return false; // 上端より上は空
+      }
+      return board[corner.r][corner.c] !== 0 && board[corner.r][corner.c] !== null;
+    });
+
+    const filledCount = filledCorners.filter(f => f).length;
+
+    // 3つ以上の角が埋まっていればT-Spin
+    if (filledCount >= 3) {
+      // Mini判定: 前面の角（Tの頭の方向に対する前方の角）
+      // 回転状態によって「前面」が変わる
+      // Rotation 0: 上向き (頭が上) -> 前面は上の2つ (左上, 右上)
+      // Rotation 1: 右向き (頭が右) -> 前面は右の2つ (右上, 右下)
+      // Rotation 2: 下向き (頭が下) -> 前面は下の2つ (左下, 右下)
+      // Rotation 3: 左向き (頭が左) -> 前面は左の2つ (左上, 左下)
+      const frontCornerIndices = {
+        0: [0, 1], // 左上, 右上
+        1: [1, 3], // 右上, 右下
+        2: [2, 3], // 左下, 右下
+        3: [0, 2], // 左上, 左下
+      };
+
+      const frontIndices = frontCornerIndices[rotation];
+      const frontFilled = frontIndices.filter(i => filledCorners[i]).length;
+      const backIndices = [0, 1, 2, 3].filter(i => !frontIndices.includes(i));
+      const backFilled = backIndices.filter(i => filledCorners[i]).length;
+
+      // Mini: 前面が両方埋まっていなくて、後面が両方埋まっている場合
+      // つまり、壁蹴りで無理やり入れた形
+      const isMini = backFilled === 2 && frontFilled < 2;
+
+      return { isTSpin: true, isMini };
+    }
+
+    return { isTSpin: false, isMini: false };
   }
 
   // ===== メインAPI =====
@@ -665,6 +780,7 @@
     getGhostPosition,
     evaluateBoard,
     getAllPlacements,
+    detectTSpin,
 
     // 壁蹴りを試行
     tryWallKick(state, type, fromRotation, toRotation, row, col) {

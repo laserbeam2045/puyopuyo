@@ -115,38 +115,40 @@
   const BEAM_WIDTH = 80;
   const SEARCH_DEPTH = 4;
 
-  // ===== 評価関数の重み（強化版）=====
+  // ===== 評価関数の重み（安定版）=====
   const EVAL_WEIGHTS = {
     // 穴関連（最重要 - 穴は致命的）
-    HOLE_PENALTY: -200,         // 穴1個につき大きなペナルティ
-    COVERED_HOLE_PENALTY: -40,  // 穴の上のブロック1個につき
-    DEEP_HOLE_PENALTY: -80,     // 深い穴への追加ペナルティ
-    HOLE_COLUMN_PENALTY: -30,   // 穴がある列への追加ペナルティ
+    HOLE_PENALTY: -250,         // 穴1個につき大きなペナルティ
+    COVERED_HOLE_PENALTY: -50,  // 穴の上のブロック1個につき
+    DEEP_HOLE_PENALTY: -100,    // 深い穴への追加ペナルティ
+    HOLE_COLUMN_PENALTY: -40,   // 穴がある列への追加ペナルティ
 
-    // 高さ関連
-    HEIGHT_PENALTY: -10,        // 最大高さ1行につき
-    AVG_HEIGHT_PENALTY: -4,     // 平均高さペナルティ
+    // 高さ関連（危険回避重視）
+    HEIGHT_PENALTY: -15,        // 最大高さ1行につき
+    HEIGHT_SQUARED_PENALTY: -3, // 高さの2乗ペナルティ（高いほど急激に悪化）
+    AVG_HEIGHT_PENALTY: -5,     // 平均高さペナルティ
     HEIGHT_VARIANCE_PENALTY: -8, // 高さのばらつき
-    CENTER_HEIGHT_PENALTY: -5,  // 中央列が高い場合のペナルティ
+    CENTER_HEIGHT_PENALTY: -8,  // 中央列が高い場合のペナルティ
+    DANGER_HEIGHT_PENALTY: -100, // 危険な高さ（15以上）への追加ペナルティ
 
     // 形状関連
     BUMPINESS_PENALTY: -5,      // 隣接列の高さ差
     CLIFF_PENALTY: -20,         // 3以上の段差
     BLOCKED_COLUMN_PENALTY: -25, // 完全にブロックされた列
 
-    // ライン消しボーナス
-    LINES_CLEARED: 400,         // 消した行数ボーナス（1行あたり）
-    LINES_CLEARED_BONUS: [0, 100, 500, 900, 1500],  // 同時消し行数ボーナス
+    // ライン消しボーナス（大幅強化）
+    LINES_CLEARED: 600,         // 消した行数ボーナス（1行あたり）
+    LINES_CLEARED_BONUS: [0, 200, 600, 1000, 1600],  // 同時消し行数ボーナス
 
     // 行の完成度ボーナス
-    ALMOST_COMPLETE_ROW: 30,    // 9/10埋まっている行
-    NEARLY_COMPLETE_ROW: 15,    // 8/10埋まっている行
+    ALMOST_COMPLETE_ROW: 50,    // 9/10埋まっている行
+    NEARLY_COMPLETE_ROW: 25,    // 8/10埋まっている行
 
-    // 戦略的ボーナス
-    WELL_DEPTH_BONUS: 15,       // I用の溝ボーナス（端のみ）
-    SINGLE_WELL_BONUS: 25,      // 溝が1箇所のみの場合のボーナス
-    FLAT_BONUS: 35,             // 平らな盤面ボーナス
-    LOW_PROFILE_BONUS: 50,      // 全体的に低い盤面ボーナス
+    // 戦略的ボーナス（控えめに）
+    WELL_DEPTH_BONUS: 8,        // I用の溝ボーナス（端のみ）- 控えめに
+    SINGLE_WELL_BONUS: 15,      // 溝が1箇所のみの場合のボーナス
+    FLAT_BONUS: 40,             // 平らな盤面ボーナス
+    LOW_PROFILE_BONUS: 80,      // 全体的に低い盤面ボーナス（強化）
     PERFECT_CLEAR_BONUS: 500,   // 全消しボーナス
   };
 
@@ -385,9 +387,17 @@
     score += deepHoles * EVAL_WEIGHTS.DEEP_HOLE_PENALTY;
     score += holeColumns * EVAL_WEIGHTS.HOLE_COLUMN_PENALTY;
 
-    // 高さのペナルティ
+    // 高さのペナルティ（線形 + 2乗で急激に悪化）
     score += maxHeight * EVAL_WEIGHTS.HEIGHT_PENALTY;
+    score += (maxHeight * maxHeight) * EVAL_WEIGHTS.HEIGHT_SQUARED_PENALTY;
     score += avgHeight * EVAL_WEIGHTS.AVG_HEIGHT_PENALTY;
+
+    // 危険な高さへの追加ペナルティ（15行以上は非常に危険）
+    if (maxHeight >= 15) {
+      score += (maxHeight - 14) * EVAL_WEIGHTS.DANGER_HEIGHT_PENALTY;
+    } else if (maxHeight >= 12) {
+      score += (maxHeight - 11) * (EVAL_WEIGHTS.DANGER_HEIGHT_PENALTY / 2);
+    }
 
     // 中央列が高い場合のペナルティ（ゲームオーバーしやすい）
     const centerHeight = Math.max(heights[4], heights[5]);
@@ -427,7 +437,8 @@
     score += cliffs * EVAL_WEIGHTS.CLIFF_PENALTY;
 
     // 溝評価（端の溝は良い、複数の溝は悪い）
-    if (wellCount === 1) {
+    // ただし、危険な高さの時は溝ボーナスを無効化（ライン消しを優先させる）
+    if (wellCount === 1 && maxHeight < 12) {
       const wellCol = wellPositions[0];
       // 端の溝はI-ミノ用として良い
       if (wellCol === 0 || wellCol === COLS - 1) {
@@ -443,24 +454,26 @@
       score += (wellCount - 1) * EVAL_WEIGHTS.BLOCKED_COLUMN_PENALTY;
     }
 
-    // 行の完成度ボーナス
+    // 行の完成度ボーナス（危険時は強化）
+    const dangerMultiplier = maxHeight >= 12 ? 3 : (maxHeight >= 10 ? 2 : 1);
     for (let r = HIDDEN_ROWS; r < TOTAL_ROWS; r++) {
       let filledCount = 0;
       for (let c = 0; c < COLS; c++) {
         if (state.board[r][c]) filledCount++;
       }
       if (filledCount === COLS - 1) {
-        score += EVAL_WEIGHTS.ALMOST_COMPLETE_ROW;
+        score += EVAL_WEIGHTS.ALMOST_COMPLETE_ROW * dangerMultiplier;
       } else if (filledCount === COLS - 2) {
-        score += EVAL_WEIGHTS.NEARLY_COMPLETE_ROW;
+        score += EVAL_WEIGHTS.NEARLY_COMPLETE_ROW * dangerMultiplier;
       }
     }
 
-    // ライン消しボーナス
+    // ライン消しボーナス（危険時は強化して消しを優先）
     if (linesCleared > 0) {
-      score += linesCleared * EVAL_WEIGHTS.LINES_CLEARED;
+      const clearMultiplier = maxHeight >= 12 ? 2 : 1;
+      score += linesCleared * EVAL_WEIGHTS.LINES_CLEARED * clearMultiplier;
       const bonusIdx = Math.min(linesCleared, EVAL_WEIGHTS.LINES_CLEARED_BONUS.length - 1);
-      score += EVAL_WEIGHTS.LINES_CLEARED_BONUS[bonusIdx];
+      score += EVAL_WEIGHTS.LINES_CLEARED_BONUS[bonusIdx] * clearMultiplier;
     }
 
     // 平らボーナス

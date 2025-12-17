@@ -734,6 +734,11 @@
       let softDropInterval = null;
       const SOFT_DROP_SPEED = 50;  // 50ms間隔
 
+      // 長押し移動
+      let moveInterval = null;
+      const MOVE_INITIAL_DELAY = 150;  // 最初の遅延
+      const MOVE_REPEAT_SPEED = 50;    // 連続移動の間隔
+
       // 7-bag
       let bag = [];
 
@@ -946,14 +951,39 @@
       }
 
       function moveMino(direction) {
-        if (!canInput()) return;
-        lockInput();
+        if (!currentMino || isProcessing || gameOver || isPaused || !gameStarted) return false;
 
         if (canPlace(currentMino.type, currentMino.rotation, currentMino.row, currentMino.col + direction)) {
           currentMino.col += direction;
           lastMoveWasRotation = false;  // 移動したので回転フラグをリセット
           renderBoard();
           resetDropTimer();
+          return true;
+        }
+        return false;
+      }
+
+      function startMove(direction) {
+        stopMove();
+
+        // 最初の1回
+        moveMino(direction);
+
+        // 少し待ってから連続移動開始
+        moveInterval = setTimeout(() => {
+          moveInterval = setInterval(() => {
+            if (!moveMino(direction)) {
+              stopMove();
+            }
+          }, MOVE_REPEAT_SPEED);
+        }, MOVE_INITIAL_DELAY);
+      }
+
+      function stopMove() {
+        if (moveInterval) {
+          clearTimeout(moveInterval);
+          clearInterval(moveInterval);
+          moveInterval = null;
         }
       }
 
@@ -1369,6 +1399,7 @@
         gameOver = true;
         stopDropInterval();
         stopSoftDrop();
+        stopMove();
 
         document.getElementById('finalScore').textContent = score.toLocaleString();
         document.getElementById('finalLines').textContent = lines;
@@ -1391,6 +1422,7 @@
         if (isPaused) {
           stopDropInterval();
           stopSoftDrop();
+          stopMove();
           if (pauseBtn) pauseBtn.classList.add('active');
           if (pauseOverlay) pauseOverlay.classList.add('show');
         } else {
@@ -1427,8 +1459,52 @@
           });
         }
 
-        addHandler(btnLeft, () => moveMino(-1));
-        addHandler(btnRight, () => moveMino(1));
+        // 左移動（長押し対応）
+        if (btnLeft) {
+          btnLeft.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startMove(-1);
+          }, { passive: false });
+
+          btnLeft.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            stopMove();
+          }, { passive: false });
+
+          btnLeft.addEventListener('touchcancel', () => stopMove());
+
+          btnLeft.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            startMove(-1);
+          });
+
+          btnLeft.addEventListener('mouseup', () => stopMove());
+          btnLeft.addEventListener('mouseleave', () => stopMove());
+        }
+
+        // 右移動（長押し対応）
+        if (btnRight) {
+          btnRight.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startMove(1);
+          }, { passive: false });
+
+          btnRight.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            stopMove();
+          }, { passive: false });
+
+          btnRight.addEventListener('touchcancel', () => stopMove());
+
+          btnRight.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            startMove(1);
+          });
+
+          btnRight.addEventListener('mouseup', () => stopMove());
+          btnRight.addEventListener('mouseleave', () => stopMove());
+        }
+
         addHandler(btnRotate, () => rotateMino(1));
         addHandler(btnHard, () => hardDrop());
         addHandler(btnHold, () => holdMino_());
@@ -1535,9 +1611,9 @@
             if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 30) {
               moveMino(deltaX > 0 ? 1 : -1);
             } else if (deltaY > 30) {
-              hardDrop();
+              holdMino_();  // 下スワイプ: ホールド
             } else if (deltaY < -30) {
-              holdMino_();
+              hardDrop();   // 上スワイプ: 落下
             } else if (Math.abs(deltaX) < 15 && Math.abs(deltaY) < 15 && deltaTime < 300) {
               rotateMino(1);
             }
